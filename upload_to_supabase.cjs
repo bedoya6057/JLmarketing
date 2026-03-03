@@ -89,23 +89,17 @@ async function startMigration() {
 
     if (fs.existsSync(respuestasFile)) {
         let respuestasData = JSON.parse(fs.readFileSync(respuestasFile, 'utf8'));
-        // Saltar los primeros 15000 que sabemos que ya insertaron en las dos pasadas:
-        // En primer intento (con "Juan Valle" fallido) subió hasta 18338 con errores desperdigados, 
-        // pero usar .upsert o skip logic es mejor porque supabase .insert() tira error en duplicados si hay PK. 
-        // Dado que la DB autogenera UUID para PK, los insertará repetidos.
-        // Pero dado que estamos haciendo una prueba / migración y el usuario no se quejó de duplicados y
-        // en este JSON no hay ID. Omitiré los 15,000 para cargar el bloque rebotado final.
-        respuestasData = respuestasData.slice(15000);
         await insertInBatches('respuestas', respuestasData);
     } else {
         console.log(`No encontrado: ${respuestasFile}`);
     }
 
-    // Exhibiciones ya se completó (31390/31390) así que lo ignoramos
-    // if (fs.existsSync(exhibicionesFile)) {
-    //    const exhibicionesData = JSON.parse(fs.readFileSync(exhibicionesFile, 'utf8'));
-    //    await insertInBatches('respuestas_exhibicion', exhibicionesData);
-    //}
+    if (fs.existsSync(exhibicionesFile)) {
+        let exhibicionesData = JSON.parse(fs.readFileSync(exhibicionesFile, 'utf8'));
+        await insertInBatches('respuestas_exhibicion', exhibicionesData);
+    } else {
+        console.log(`No encontrado: ${exhibicionesFile}`);
+    }
 
     console.log("\n🚀 Migración finalizada.");
 }

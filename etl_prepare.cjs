@@ -24,7 +24,14 @@ function mapToRespuestas(row, headers, fileName) {
         return index > -1 ? row[index] : null;
     };
 
-    const getBool = (v) => { if (v === 'SI') return true; if (v === 'NO') return false; return v === true || v === 1; };
+    const getBool = (v) => {
+        if (v === true || v === 1) return true;
+        if (!v || typeof v !== 'string') return false;
+        const normalized = v.toString().trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (normalized === 'SI') return true;
+        if (normalized === 'NO') return false;
+        return false;
+    };
     const getNum = (v) => { const n = parseFloat(v); return isNaN(n) ? null : n; };
 
     // Format new domain for photos:
@@ -80,7 +87,14 @@ function mapToExhibicion(row, headers, fileName) {
         return url.replace('mznbbplygemkbolqcjjn.supabase.co', 'ypwubwjpeqbpsujmopfy.supabase.co');
     };
 
-    const getBool = (v) => { if (v === 'SI') return true; if (v === 'NO') return false; return v === true || v === 1; };
+    const getBool = (v) => {
+        if (v === true || v === 1) return true;
+        if (!v || typeof v !== 'string') return false;
+        const normalized = v.toString().trim().toUpperCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        if (normalized === 'SI') return true;
+        if (normalized === 'NO') return false;
+        return false;
+    };
 
     return {
         bandera: getValue('BANDERA'),
