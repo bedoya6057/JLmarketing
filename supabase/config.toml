@@ -1,0 +1,37 @@
+project_id = "ypwubwjpeqbpsujmopfy"
+
+[functions.bulk-create-users]
+verify_jwt = false
+
+[functions.check-user-active]
+verify_jwt = false
+
+[functions.create-admin-user]
+verify_jwt = false
+
+[functions.create-encuestador-user]
+verify_jwt = false
+
+[functions.create-user]
+verify_jwt = false
+
+[functions.fix-photo-urls]
+verify_jwt = false
+
+[functions.list-users]
+verify_jwt = false
+
+[functions.match-orphan-photos]
+verify_jwt = false
+
+[functions.reset-user-passwords]
+verify_jwt = false
+
+[functions.sync-encarte-respuestas]
+verify_jwt = false
+
+[functions.update-user]
+verify_jwt = false
+
+[functions.validate-photo-urls]
+verify_jwt = false
