@@ -22,5 +22,9 @@ export default defineConfig(({ mode }) => ({
         assetFileNames: `assets/[name]-[hash].[ext]`
       }
     }
+  },
+  define: {
+    'process.env.VITE_AWS_ACCESS_KEY_ID': JSON.stringify(process.env.VITE_AWS_ACCESS_KEY_ID),
+    'process.env.VITE_AWS_SECRET_ACCESS_KEY': JSON.stringify(process.env.VITE_AWS_SECRET_ACCESS_KEY)
   }
 }));
