@@ -63,8 +63,8 @@ export const uploadPhotoToS3 = async (
         await s3Client.send(command);
 
         return `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
-    } catch (error) {
+    } catch (error: any) {
         console.error("Error uploading photo to AWS S3:", error);
-        return null;
+        throw new Error(`Error S3: ${error.message || error}`);
     }
 };
