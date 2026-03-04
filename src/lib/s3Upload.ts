@@ -17,45 +17,45 @@ export const uploadPhotoToS3 = async (
             }
         });
 
-        let blob: Blob;
+        let bodyData: Uint8Array | Blob;
         let contentType = "image/jpeg";
 
         if (typeof fileData === "string") {
-            // Capacitor/Android often fails `fetch()` on data URIs. Using atob instead.
             const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
 
             if (matches && matches.length === 3) {
                 contentType = matches[1];
                 const b64Data = matches[2];
-                const byteCharacters = atob(b64Data);
-                const byteArrays = [];
+                const byteString = atob(b64Data);
+                const arrayBuffer = new ArrayBuffer(byteString.length);
+                const uint8Array = new Uint8Array(arrayBuffer);
 
-                for (let offset = 0; offset < byteCharacters.length; offset += 512) {
-                    const slice = byteCharacters.slice(offset, offset + 512);
-                    const byteNumbers = new Array(slice.length);
-                    for (let i = 0; i < slice.length; i++) {
-                        byteNumbers[i] = slice.charCodeAt(i);
-                    }
-                    const byteArray = new Uint8Array(byteNumbers);
-                    byteArrays.push(byteArray);
+                for (let i = 0; i < byteString.length; i++) {
+                    uint8Array[i] = byteString.charCodeAt(i);
                 }
-                blob = new Blob(byteArrays, { type: contentType });
+
+                bodyData = uint8Array; // Pass raw Uint8Array instead of Blob to avoid getsReader error
             } else {
                 // Fallback for valid non-data URLs
                 const res = await fetch(fileData);
-                blob = await res.blob();
+                const arrayBuffer = await res.arrayBuffer();
+                bodyData = new Uint8Array(arrayBuffer);
+
                 if (fileData.startsWith("data:image/png")) contentType = "image/png";
                 if (fileData.startsWith("data:image/webp")) contentType = "image/webp";
             }
-        } else {
-            blob = fileData;
+        } else if (fileData instanceof Blob) {
+            const arrayBuffer = await fileData.arrayBuffer();
+            bodyData = new Uint8Array(arrayBuffer);
             contentType = fileData.type || "image/jpeg";
+        } else {
+            bodyData = fileData as any;
         }
 
         const command = new PutObjectCommand({
             Bucket: BUCKET_NAME,
             Key: fileName,
-            Body: blob as any,
+            Body: bodyData,
             ContentType: contentType,
             // ACL: 'public-read' // Only if bucket allows ACLs, usually bucket policy is better
         });
