@@ -10,7 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { Camera } from "lucide-react";
+import { Camera, Check, UploadCloud } from "lucide-react";
+import { uploadPhotoToS3 } from "@/lib/s3Upload";
 import { compressImage, base64ToBlob } from "@/lib/imageCompression";
 import { withRetry, debounce } from "@/lib/retryLogic";
 import { toast } from "sonner";
@@ -1173,40 +1174,28 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
         throw new Error("Formato de imagen inválido");
       }
 
-      // Use fast fetch-based conversion instead of byte-by-byte loop
-      const blob = await base64ToBlob(dataUrl);
-      const file = new File([blob], fileName, { type: "image/jpeg" });
-
       // Generate new naming format if tienda and codProducto are provided
       const uploadPath = tienda && codProducto
         ? generatePhotoFileName(tienda, codProducto, userId, 'producto')
         : `${userId}/${Date.now()}_${fileName}`;
 
-      // Usar retry logic para subida de fotos
-      const { data, error } = await withRetry(
+      // Usar retry logic para subida de fotos a S3
+      const { data: s3Url, error } = await withRetry(
         async () => {
-          const result = await supabase.storage
-            .from("encarte-photos")
-            .upload(uploadPath, file);
-
-          if (result.error) throw result.error;
-          return result;
+          const result = await uploadPhotoToS3(dataUrl, uploadPath);
+          if (!result) throw new Error("Error al subir imagen a S3");
+          return { data: result, error: null };
         },
         {
           maxRetries: 3,
           onRetry: (attempt) => {
-            console.log(`Reintentando subir foto (intento ${attempt})...`);
+            console.log(`Reintentando subir foto a S3 (intento ${attempt})...`);
           }
         }
       );
 
       if (error) throw error;
-
-      const { data: urlData } = supabase.storage
-        .from("encarte-photos")
-        .getPublicUrl(data.path);
-
-      return urlData.publicUrl;
+      return s3Url;
     } catch (error: any) {
       console.error("❌ Error uploading photo:", error);
 
@@ -2253,7 +2242,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
                 Presencia del Producto <span className="text-red-500">*</span>
               </Label>
               <RadioGroup
-                value={formData.presencia_producto === null ? undefined : formData.presencia_producto ? "si" : "no"}
+                value={formData.presencia_producto === null ? "" : formData.presencia_producto ? "si" : "no"}
                 onValueChange={(value) =>
                   setFormData({
                     ...formData,
@@ -2300,7 +2289,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
                 Presencia de cartel <span className="text-red-500">*</span>
               </Label>
               <RadioGroup
-                value={formData.presencia_cartel === null ? undefined : formData.presencia_cartel ? "si" : "no"}
+                value={formData.presencia_cartel === null ? "" : formData.presencia_cartel ? "si" : "no"}
                 onValueChange={(value) =>
                   setFormData({
                     ...formData,
@@ -2571,7 +2560,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
               Presencia del Producto <span className="text-red-500">*</span>
             </Label>
             <RadioGroup
-              value={formData.presencia_producto === null ? undefined : formData.presencia_producto ? "si" : "no"}
+              value={formData.presencia_producto === null ? "" : formData.presencia_producto ? "si" : "no"}
               onValueChange={(value) =>
                 setFormData({
                   ...formData,
@@ -2618,7 +2607,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
               Presencia de cartel <span className="text-red-500">*</span>
             </Label>
             <RadioGroup
-              value={formData.presencia_cartel === null ? undefined : formData.presencia_cartel ? "si" : "no"}
+              value={formData.presencia_cartel === null ? "" : formData.presencia_cartel ? "si" : "no"}
               onValueChange={(value) =>
                 setFormData({
                   ...formData,

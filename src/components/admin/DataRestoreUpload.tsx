@@ -6,6 +6,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 import { Upload, Loader2, CheckCircle, AlertCircle } from "lucide-react";
 import * as XLSX from "xlsx";
+import { uploadPhotoToS3 } from "@/lib/s3Upload";
 
 interface Props {
   exhibicionId: string;
@@ -34,8 +35,8 @@ const pick = (row: Record<string, any>, candidates: string[]): string => {
 export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
   const [isProcessing, setIsProcessing] = useState(false);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
-  const [results, setResults] = useState<{ success: number; errors: number; skipped: number; reasons: Record<string, number> }>({ 
-    success: 0, errors: 0, skipped: 0, reasons: {} 
+  const [results, setResults] = useState<{ success: number; errors: number; skipped: number; reasons: Record<string, number> }>({
+    success: 0, errors: 0, skipped: 0, reasons: {}
   });
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
@@ -58,7 +59,7 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
   const getUserIdForStore = async (tienda: string): Promise<string> => {
     // If no tienda, return current admin user
     if (!tienda) return currentUserId || "";
-    
+
     // Check cache first
     const cacheKey = tienda.toLowerCase().trim();
     if (userCache.has(cacheKey)) {
@@ -93,48 +94,15 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
 
   // Upload base64 image to storage and return URL
   const uploadBase64ToStorage = async (base64Data: string, fileName: string): Promise<string | null> => {
-    try {
-      // Extract the base64 content (remove data:image/jpeg;base64, prefix)
-      const base64Content = base64Data.split(",")[1];
-      if (!base64Content) return null;
-
-      // Convert base64 to blob
-      const byteCharacters = atob(base64Content);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: "image/jpeg" });
-
-      // Upload to storage
-      const { error, data } = await supabase.storage
-        .from("encarte-photos")
-        .upload(fileName, blob);
-
-      if (error) {
-        console.error("Upload error:", error);
-        return null;
-      }
-
-      // Get public URL
-      const { data: { publicUrl } } = supabase.storage
-        .from("encarte-photos")
-        .getPublicUrl(data.path);
-
-      return publicUrl;
-    } catch (error) {
-      console.error("Error uploading base64:", error);
-      return null;
-    }
+    return await uploadPhotoToS3(base64Data, fileName);
   };
 
   // Search for photo in storage by filename
   const findPhotoInStorage = async (filename: string): Promise<string | null> => {
     if (!filename) return null;
-    
+
     const cleanFilename = filename.trim();
-    
+
     try {
       // List all folders (user IDs) in the bucket
       const { data: folders, error: foldersError } = await supabase.storage
@@ -149,7 +117,7 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
       // Search in each folder for the file
       for (const folder of folders) {
         if (folder.id) continue; // Skip if it's a file at root level
-        
+
         const { data: files, error: filesError } = await supabase.storage
           .from("encarte-photos")
           .list(folder.name, { limit: 1000 });
@@ -157,8 +125,8 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
         if (filesError || !files) continue;
 
         // Look for exact match or partial match
-        const matchedFile = files.find(f => 
-          f.name === cleanFilename || 
+        const matchedFile = files.find(f =>
+          f.name === cleanFilename ||
           f.name.includes(cleanFilename) ||
           cleanFilename.includes(f.name.replace(".jpg", "").replace(".jpeg", "").replace(".png", ""))
         );
@@ -170,11 +138,11 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
 
       // Also check root level files
       const rootFiles = folders.filter(f => f.id !== null);
-      const rootMatch = rootFiles.find(f => 
-        f.name === cleanFilename || 
+      const rootMatch = rootFiles.find(f =>
+        f.name === cleanFilename ||
         f.name.includes(cleanFilename)
       );
-      
+
       if (rootMatch) {
         return `${STORAGE_BASE_URL}${rootMatch.name}`;
       }
@@ -189,18 +157,18 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
 
   const processPhoto = async (photoData: string | undefined, userId: string, productoId: string, suffix: string): Promise<string | null> => {
     if (!photoData) return null;
-    
+
     const cleanPhotoData = photoData.trim();
-    
+
     // If already a full URL, return as is
     if (cleanPhotoData.startsWith("http")) return cleanPhotoData;
-    
+
     // If it's base64, upload to storage
     if (cleanPhotoData.startsWith("data:")) {
       const fileName = `${userId}/${exhibicionId}_${productoId}_${Date.now()}_${suffix}.jpg`;
       return await uploadBase64ToStorage(cleanPhotoData, fileName);
     }
-    
+
     // Otherwise, search for the filename in storage
     return await findPhotoInStorage(cleanPhotoData);
   };
@@ -213,7 +181,7 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
       .eq("cod_producto", codProducto)
       .ilike("tienda", `%${tienda.replace("PVEA ", "")}%`)
       .maybeSingle();
-    
+
     return data?.id || null;
   };
 
@@ -225,7 +193,7 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
       .eq("producto_id", productoId)
       .ilike("tienda", `%${tienda}%`)
       .maybeSingle();
-    
+
     return !!data;
   };
 
@@ -244,7 +212,7 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
       const rows = XLSX.utils.sheet_to_json<Record<string, any>>(worksheet, { defval: "" });
 
       setProgress({ current: 0, total: rows.length });
-      
+
       let successCount = 0;
       let errorCount = 0;
       let skippedCount = 0;
@@ -362,7 +330,7 @@ export const DataRestoreUpload = ({ exhibicionId, onComplete }: Props) => {
       }
 
       setResults({ success: successCount, errors: errorCount, skipped: skippedCount, reasons: skipReasons });
-      
+
       if (successCount > 0) {
         toast.success(`${successCount} registros restaurados exitosamente`);
         onComplete?.();

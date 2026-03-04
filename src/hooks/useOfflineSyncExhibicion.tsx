@@ -5,6 +5,7 @@ import { base64ToBlob, isAlreadyCompressed, compressImage } from "@/lib/imageCom
 import { toast } from "sonner";
 import { eventLogger, EventType, EventSeverity } from "@/lib/eventLogger";
 import { generatePhotoFileName } from "@/lib/fileNaming";
+import { uploadPhotoToS3 } from "@/lib/s3Upload";
 
 const BATCH_SIZE = 20; // Sync in batches of 20 items
 const PARALLEL_UPLOADS = 3; // Upload 3 photos in parallel
@@ -44,21 +45,11 @@ export const useOfflineSyncExhibicion = (
       if (!isAlreadyCompressed(base64Data)) {
         dataToUpload = await compressImage(base64Data);
       }
-      
+
       // Use fast fetch-based conversion instead of byte-by-byte loop
-      const blob = await base64ToBlob(dataToUpload);
-
-      const { error, data } = await supabase.storage
-        .from("encarte-photos")
-        .upload(fileName, blob);
-
-      if (error) throw error;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from("encarte-photos")
-        .getPublicUrl(data.path);
-
-      return publicUrl;
+      const s3Url = await uploadPhotoToS3(dataToUpload, fileName);
+      if (!s3Url) throw new Error("AWS S3 Upload Failed");
+      return s3Url;
     } catch (error) {
       console.error("Error uploading photo:", error);
       return null;
@@ -79,21 +70,21 @@ export const useOfflineSyncExhibicion = (
         let fotoUrl = respuesta.data.foto;
 
         // Upload photo if it's base64 - check both possible locations
-        const base64Photo = respuesta.photos?.fotoProducto || 
-                           (respuesta.data.foto?.startsWith("data:") ? respuesta.data.foto : null);
-        
+        const base64Photo = respuesta.photos?.fotoProducto ||
+          (respuesta.data.foto?.startsWith("data:") ? respuesta.data.foto : null);
+
         if (base64Photo?.startsWith("data:")) {
           eventLogger.log(EventType.PHOTO_UPLOAD, "Subiendo foto offline", {
             severity: EventSeverity.INFO,
             context: { exhibicionId, productoId: respuesta.productoId, batchIndex: startIndex + i },
           });
-          
+
           // Extract tienda and cod_producto from data for new naming format
-           const tienda = respuesta.data?.tienda || '';
-           const codProducto = respuesta.data?.cod_producto || '';
-           const fileName = generatePhotoFileName(tienda, codProducto, syncUserId, 'producto');
-           fotoUrl = await uploadPhoto(base64Photo, fileName);
-          
+          const tienda = respuesta.data?.tienda || '';
+          const codProducto = respuesta.data?.cod_producto || '';
+          const fileName = generatePhotoFileName(tienda, codProducto, syncUserId, 'producto');
+          fotoUrl = await uploadPhoto(base64Photo, fileName);
+
           if (fotoUrl) {
             eventLogger.log(EventType.PHOTO_UPLOAD, "Foto offline subida exitosamente", {
               severity: EventSeverity.SUCCESS,
@@ -111,14 +102,14 @@ export const useOfflineSyncExhibicion = (
         // CRITICAL: Excluir created_by del spread para forzar el userId actual
         // Esto evita que un created_by obsoleto en datos offline cause errores RLS
         const { created_by: _ignoredCreatedBy, ...restData } = respuesta.data || {};
-         const { error } = await supabase.from("respuestas_exhibicion").upsert({
-           ...restData,
-           foto: fotoUrl,
-           created_by: syncUserId, // Forzar el userId del sync para cumplir con RLS - DESPUÉS del spread
-         }, { 
-           onConflict: 'exhibicion_id,producto_id,tienda,created_by,fecha',
-           ignoreDuplicates: true // Ignorar si ya existe
-         });
+        const { error } = await supabase.from("respuestas_exhibicion").upsert({
+          ...restData,
+          foto: fotoUrl,
+          created_by: syncUserId, // Forzar el userId del sync para cumplir con RLS - DESPUÉS del spread
+        }, {
+          onConflict: 'exhibicion_id,producto_id,tienda,created_by,fecha',
+          ignoreDuplicates: true // Ignorar si ya existe
+        });
 
         if (error && !error.message.includes('duplicate')) throw error;
 
@@ -134,7 +125,7 @@ export const useOfflineSyncExhibicion = (
         console.error("Error syncing respuesta:", error);
         errors++;
         setErrorCount(prev => prev + 1);
-        
+
         eventLogger.log(EventType.SYNC_ERROR, "Error sincronizando respuesta exhibición", {
           severity: EventSeverity.ERROR,
           context: { exhibicionId, productoId: respuesta.productoId },
@@ -180,10 +171,10 @@ export const useOfflineSyncExhibicion = (
       // Sync pending respuestas
       const pendingRespuestas = await offlineStorage.getPendingRespuestasExhibicion(exhibicionId);
       const pendingProgreso = await offlineStorage.getPendingProgresoExhibicion(exhibicionId, userId);
-      
+
       const totalItems = pendingRespuestas.length + (pendingProgreso && !pendingProgreso.synced ? 1 : 0);
       setTotalToSync(totalItems);
-      
+
       if (pendingRespuestas.length > 0) {
         toast.info(`Sincronizando ${pendingRespuestas.length} registros...`);
       }
@@ -192,12 +183,12 @@ export const useOfflineSyncExhibicion = (
       let totalErrors = 0;
 
       // Sync respuestas in batches
-       for (let i = 0; i < pendingRespuestas.length; i += BATCH_SIZE) {
-         const batch = pendingRespuestas.slice(i, i + BATCH_SIZE);
-         const { success, errors } = await syncBatch(batch, i, effectiveUserId);
-         totalSuccess += success;
-         totalErrors += errors;
-        
+      for (let i = 0; i < pendingRespuestas.length; i += BATCH_SIZE) {
+        const batch = pendingRespuestas.slice(i, i + BATCH_SIZE);
+        const { success, errors } = await syncBatch(batch, i, effectiveUserId);
+        totalSuccess += success;
+        totalErrors += errors;
+
         // Small delay between batches to avoid overwhelming the server
         if (i + BATCH_SIZE < pendingRespuestas.length) {
           await new Promise(resolve => setTimeout(resolve, 500));
@@ -207,23 +198,23 @@ export const useOfflineSyncExhibicion = (
       // Sync progreso
       if (pendingProgreso && !pendingProgreso.synced) {
         try {
-           // Manual select+update/insert to avoid 42P10 upsert cache issues
-           const progresoPayload = {
-             ...pendingProgreso.data,
-             user_id: effectiveUserId,
-             exhibicion_id: exhibicionId,
-           };
-           const { data: existingProg } = await supabase
-             .from("progreso_encuestador_exhibicion")
-             .select("id")
-             .eq("user_id", effectiveUserId)
-             .eq("exhibicion_id", exhibicionId)
-             .eq("tienda", pendingProgreso.data.tienda)
-             .maybeSingle();
+          // Manual select+update/insert to avoid 42P10 upsert cache issues
+          const progresoPayload = {
+            ...pendingProgreso.data,
+            user_id: effectiveUserId,
+            exhibicion_id: exhibicionId,
+          };
+          const { data: existingProg } = await supabase
+            .from("progreso_encuestador_exhibicion")
+            .select("id")
+            .eq("user_id", effectiveUserId)
+            .eq("exhibicion_id", exhibicionId)
+            .eq("tienda", pendingProgreso.data.tienda)
+            .maybeSingle();
 
-           const { error } = existingProg
-             ? await supabase.from("progreso_encuestador_exhibicion").update(progresoPayload).eq("id", existingProg.id)
-             : await supabase.from("progreso_encuestador_exhibicion").insert(progresoPayload);
+          const { error } = existingProg
+            ? await supabase.from("progreso_encuestador_exhibicion").update(progresoPayload).eq("id", existingProg.id)
+            : await supabase.from("progreso_encuestador_exhibicion").insert(progresoPayload);
 
           if (!error) {
             await offlineStorage.deleteProgresoExhibicion(pendingProgreso.id);
@@ -269,13 +260,13 @@ export const useOfflineSyncExhibicion = (
     checkPendingCount();
   }, [checkPendingCount]);
 
-  return { 
-    isSyncing, 
-    pendingCount, 
-    syncedCount, 
-    totalToSync, 
-    errorCount, 
-    syncData, 
-    checkPendingCount 
+  return {
+    isSyncing,
+    pendingCount,
+    syncedCount,
+    totalToSync,
+    errorCount,
+    syncData,
+    checkPendingCount
   };
 };

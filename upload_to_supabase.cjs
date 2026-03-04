@@ -1,10 +1,8 @@
 const fs = require('fs');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
-
 // Se usarán las credenciales de .env del proyecto principal
-const supabaseUrl = process.env.VITE_SUPABASE_URL || '';
+const supabaseUrl = 'https://ypwubwjpeqbpsujmopfy.supabase.co';
 const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inlwd3Vid2pwZXFicHN1am1vcGZ5Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MTk3ODAyNiwiZXhwIjoyMDg3NTU0MDI2fQ.AqV8n3KukZX56z-ZKp012QPSpPnszdFuUu4aFR4VHSg';
 
 if (!supabaseUrl || !supabaseKey) {
@@ -34,6 +32,8 @@ async function insertInBatches(tableName, dataArray) {
             if (tableName === 'respuestas') {
                 delete cleanRow.foto_salida;
             }
+
+            delete cleanRow.origen_excel;
 
             // Eliminar ForeignKeys si no son UUIDs reales (esto rompe el import en Supabase)
             const uuidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

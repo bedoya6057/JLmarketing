@@ -27,6 +27,7 @@ import { SyncProgressIndicator } from "@/components/SyncProgressIndicator";
 import { debounce } from "@/lib/retryLogic";
 import { eventLogger, EventType, EventSeverity } from "@/lib/eventLogger";
 import { generatePhotoFileName, generateIngresoPhotoFileName } from "@/lib/fileNaming";
+import { uploadPhotoToS3 } from "@/lib/s3Upload";
 
 interface Exhibicion {
   id: string;
@@ -961,21 +962,11 @@ export const EncuestadorExhibicionForm = ({ isOnline, syncTrigger, onSyncRequest
       const compressedDataUrl = await compressImageFile(file);
 
       if (isOnline) {
-        // Use fast fetch-based conversion instead of byte-by-byte loop
-        const blob = await base64ToBlob(compressedDataUrl);
+        const s3Url = await uploadPhotoToS3(compressedDataUrl, fileName);
+        if (!s3Url) throw new Error("AWS S3 Upload Failed");
 
-        // Use new naming format for ingreso photos
-        const fileName = generateIngresoPhotoFileName(selectedTienda, userId);
-        const { error: uploadError, data } = await supabase.storage
-          .from("encarte-photos")
-          .upload(fileName, blob);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage.from("encarte-photos").getPublicUrl(data.path);
-
-        setFotoIngreso(data.path);
-        setFotoIngresoUrl(publicUrl);
+        setFotoIngreso(s3Url);
+        setFotoIngresoUrl(s3Url);
       } else {
         setFotoIngreso(compressedDataUrl);
         setFotoIngresoUrl(compressedDataUrl);
@@ -1006,26 +997,11 @@ export const EncuestadorExhibicionForm = ({ isOnline, syncTrigger, onSyncRequest
       const compressedDataUrl = await compressImageFile(file);
 
       if (isOnline) {
-        // Use fast fetch-based conversion instead of byte-by-byte loop
-        const blob = await base64ToBlob(compressedDataUrl);
+        const s3Url = await uploadPhotoToS3(compressedDataUrl, fileName);
+        if (!s3Url) throw new Error("AWS S3 Upload Failed");
 
-        // Use new naming format: tienda_cod_producto_timestamp_producto.jpg
-        const fileName = generatePhotoFileName(
-          selectedTienda,
-          currentProducto.cod_producto,
-          userId,
-          'producto'
-        );
-        const { error: uploadError, data } = await supabase.storage
-          .from("encarte-photos")
-          .upload(fileName, blob);
-
-        if (uploadError) throw uploadError;
-
-        const { data: { publicUrl } } = supabase.storage.from("encarte-photos").getPublicUrl(data.path);
-
-        setFoto(data.path);
-        setFotoUrl(publicUrl);
+        setFoto(s3Url);
+        setFotoUrl(s3Url);
       } else {
         setFoto(compressedDataUrl);
         setFotoUrl(compressedDataUrl);
@@ -1632,6 +1608,7 @@ export const EncuestadorExhibicionForm = ({ isOnline, syncTrigger, onSyncRequest
             <div className="space-y-2">
               <Label htmlFor="presencia">Presencia de Exhibición *</Label>
               <Select
+                key={currentProducto.id}
                 value={presenciaExhibicion}
                 onValueChange={setPresenciaExhibicion}
               >

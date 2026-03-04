@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { Loader2, Camera, CheckCircle2, ChevronRight } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { compressImageFile } from "@/lib/imageCompression";
+import { uploadPhotoToS3 } from "@/lib/s3Upload";
 
 interface Producto {
   id: string;
@@ -51,7 +52,7 @@ export const EncarteAuditForm = ({ encarteId }: EncarteAuditFormProps) => {
   const [fotoRegistroFile, setFotoRegistroFile] = useState<File | null>(null);
   const [fotoProductoFile, setFotoProductoFile] = useState<File | null>(null);
   const [respuestas, setRespuestas] = useState<Map<string, Respuesta>>(new Map());
-  
+
   const fotoRegistroRef = useRef<HTMLInputElement>(null);
   const fotoProductoRef = useRef<HTMLInputElement>(null);
 
@@ -130,17 +131,10 @@ export const EncarteAuditForm = ({ encarteId }: EncarteAuditFormProps) => {
     const fileExt = file.name.split(".").pop();
     const fileName = `${userId}/${encarteId}/${Date.now()}.${fileExt}`;
 
-    const { error: uploadError } = await supabase.storage
-      .from("encarte-photos")
-      .upload(fileName, file);
+    const s3Url = await uploadPhotoToS3(file, fileName);
+    if (!s3Url) throw new Error("AWS S3 Upload Failed");
 
-    if (uploadError) throw uploadError;
-
-    const { data } = supabase.storage
-      .from("encarte-photos")
-      .getPublicUrl(fileName);
-
-    return data.publicUrl;
+    return s3Url;
   };
 
   const handleSave = async () => {
@@ -163,7 +157,7 @@ export const EncarteAuditForm = ({ encarteId }: EncarteAuditFormProps) => {
         console.log("📸 Subiendo foto de registro...");
         fotoRegistroUrl = await uploadPhoto(fotoRegistroFile, user.id);
         console.log("✅ Foto de registro subida:", fotoRegistroUrl);
-        
+
         // Update encarte with foto_registro
         await supabase
           .from("encartes")
@@ -182,8 +176,8 @@ export const EncarteAuditForm = ({ encarteId }: EncarteAuditFormProps) => {
       }
 
       // Calculate precio_ok
-      const precioOk = formData.precio_encontrado === 0 || 
-                       formData.precio_encontrado === currentProducto.precio_encarte;
+      const precioOk = formData.precio_encontrado === 0 ||
+        formData.precio_encontrado === currentProducto.precio_encarte;
 
       // Preparar datos para insertar
       const respuestaData = {
@@ -249,7 +243,7 @@ export const EncarteAuditForm = ({ encarteId }: EncarteAuditFormProps) => {
           .from("encartes")
           .update({ estado: "completado" })
           .eq("id", encarteId);
-        
+
         toast.success("¡Encarte completado!");
       }
     } catch (error: any) {

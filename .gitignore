@@ -31,6 +31,9 @@ photo_urls_to_download.json
 
 # Large binaries and backups
 Exceles/
+Exceles Backuo/
+Fotos Basckup/
+backupexceles/
 *.apk
 photos_backup/
 # Local databases and exports

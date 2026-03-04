@@ -41,7 +41,7 @@ function mapToRespuestas(row, headers, fileName) {
     // Let's rewrite URLs to point to your new Supabase project ID "ypwubwjpeqbpsujmopfy"
     const transformPhoto = (url) => {
         if (!url || typeof url !== 'string') return null;
-        return url.replace('mznbbplygemkbolqcjjn.supabase.co', 'ypwubwjpeqbpsujmopfy.supabase.co');
+        return url;
     };
 
     return {
@@ -84,7 +84,7 @@ function mapToExhibicion(row, headers, fileName) {
     // We will apply the same rewrite to new Supabase
     const transformPhoto = (url) => {
         if (!url || typeof url !== 'string') return null;
-        return url.replace('mznbbplygemkbolqcjjn.supabase.co', 'ypwubwjpeqbpsujmopfy.supabase.co');
+        return url;
     };
 
     const getBool = (v) => {

@@ -22,6 +22,7 @@ import { Camera, Search, Upload, ImagePlus, Wrench, Loader2, AlertTriangle, Chec
 import { toast } from "sonner";
 import { compressImage } from "@/lib/imageCompression";
 import { generateAdminPhotoFileName } from "@/lib/fileNaming";
+import { uploadPhotoToS3 } from "@/lib/s3Upload";
 
 interface Study {
   id: string;
@@ -163,13 +164,13 @@ export const PhotoManagement = () => {
         }
 
         offset += batchSize;
-        
+
         // Small delay to prevent overwhelming the browser
         await new Promise(resolve => setTimeout(resolve, 100));
       }
 
       setInvalidUrls(allInvalid);
-      
+
       if (allInvalid.length === 0) {
         toast.success(`Validación completada: ${totalValid} URLs válidas`);
       } else {
@@ -186,7 +187,7 @@ export const PhotoManagement = () => {
 
   const handleClearInvalidUrls = async () => {
     if (invalidUrls.length === 0) return;
-    
+
     const confirmed = window.confirm(`¿Estás seguro de limpiar ${invalidUrls.length} URLs inválidas? Se pondrán en NULL.`);
     if (!confirmed) return;
 
@@ -197,7 +198,7 @@ export const PhotoManagement = () => {
           .update({ foto: null })
           .eq('id', item.id);
       }
-      
+
       toast.success(`${invalidUrls.length} URLs inválidas limpiadas`);
       setInvalidUrls([]);
       setValidationProgress(null);
@@ -356,36 +357,14 @@ export const PhotoManagement = () => {
 
     setUploading(true);
     try {
-      // Upload to storage
-      const base64Data = newPhoto.split(",")[1];
-      const byteCharacters = atob(base64Data);
-      const byteNumbers = new Array(byteCharacters.length);
-      for (let i = 0; i < byteCharacters.length; i++) {
-        byteNumbers[i] = byteCharacters.charCodeAt(i);
-      }
-      const byteArray = new Uint8Array(byteNumbers);
-      const blob = new Blob([byteArray], { type: "image/jpeg" });
-
       // Use new naming format: admin_tienda_cod_producto_timestamp.jpg
       const fileName = generateAdminPhotoFileName(
         selectedProduct.tienda,
         selectedProduct.cod_interno || selectedProduct.cod_producto
       );
-      const { error: uploadError } = await supabase.storage
-        .from("encarte-photos")
-        .upload(fileName, blob, {
-          contentType: "image/jpeg",
-          upsert: true,
-        });
 
-      if (uploadError) throw uploadError;
-
-      // Get public URL
-      const { data: urlData } = supabase.storage
-        .from("encarte-photos")
-        .getPublicUrl(fileName);
-
-      const photoUrl = urlData.publicUrl;
+      const photoUrl = await uploadPhotoToS3(newPhoto, fileName);
+      if (!photoUrl) throw new Error("AWS S3 Upload Failed");
 
       // Update record
       if (studyType === "encarte") {
@@ -443,9 +422,9 @@ export const PhotoManagement = () => {
             <Camera className="mr-2 h-4 w-4" />
             Insertar / Actualizar Foto
           </Button>
-          
-          <Button 
-            variant="secondary" 
+
+          <Button
+            variant="secondary"
             onClick={handleFixPhotoUrls}
             disabled={fixingPhotos}
           >
@@ -457,8 +436,8 @@ export const PhotoManagement = () => {
             {fixingPhotos ? "Corrigiendo..." : "Corregir URLs de Fotos"}
           </Button>
 
-          <Button 
-            variant="outline" 
+          <Button
+            variant="outline"
             onClick={handleValidatePhotoUrls}
             disabled={validatingUrls}
           >
@@ -493,8 +472,8 @@ export const PhotoManagement = () => {
             </div>
             {invalidUrls.length > 0 && !validatingUrls && (
               <div className="pt-2 space-y-2">
-                <Button 
-                  variant="destructive" 
+                <Button
+                  variant="destructive"
                   size="sm"
                   onClick={handleClearInvalidUrls}
                 >
@@ -618,9 +597,8 @@ export const PhotoManagement = () => {
                         filteredProducts.map((p) => (
                           <button
                             key={p.id}
-                            className={`w-full text-left px-3 py-2 hover:bg-accent transition-colors border-b last:border-b-0 flex items-center justify-between ${
-                              selectedProduct?.id === p.id ? "bg-accent" : ""
-                            }`}
+                            className={`w-full text-left px-3 py-2 hover:bg-accent transition-colors border-b last:border-b-0 flex items-center justify-between ${selectedProduct?.id === p.id ? "bg-accent" : ""
+                              }`}
                             onClick={() => {
                               setSelectedProduct(p);
                               setNewPhoto(null);

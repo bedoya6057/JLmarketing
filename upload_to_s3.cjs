@@ -7,8 +7,8 @@ const mime = require('mime-types');
 const s3Client = new S3Client({
     region: 'us-east-2', // User specified Ohio
     credentials: {
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'dummy_key',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'dummy_secret'
+        accessKeyId: process.env.AWS_ACCESS_KEY_ID,
+        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY
     }
 });
 

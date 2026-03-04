@@ -6,7 +6,7 @@ import { eventLogger, EventType } from "@/lib/eventLogger";
 import { base64ToBlob, isAlreadyCompressed, compressImage } from "@/lib/imageCompression";
 import { generatePhotoFileName } from "@/lib/fileNaming";
 import { normalizeError } from "@/lib/errorUtils";
-
+import { uploadPhotoToS3 } from "@/lib/s3Upload";
 const BATCH_SIZE = 20; // Sync in batches of 20 items
 
 interface SyncResultFromServer {
@@ -71,19 +71,9 @@ export const useOfflineSync = (encarteId: string, userId: string, isOnline: bool
       }
 
       // Use fast fetch-based conversion instead of byte-by-byte loop
-      const blob = await base64ToBlob(dataToUpload);
-
-      const { data, error } = await supabase.storage
-        .from("encarte-photos")
-        .upload(fileName, blob, { cacheControl: "3600", upsert: false });
-
-      if (error) throw error;
-
-      const { data: urlData } = supabase.storage
-        .from("encarte-photos")
-        .getPublicUrl(data.path);
-
-      return urlData.publicUrl;
+      const s3Url = await uploadPhotoToS3(dataToUpload, fileName);
+      if (!s3Url) throw new Error("AWS S3 Upload Failed");
+      return s3Url;
     } catch (error) {
       console.error("Error uploading photo:", error);
       return null;
