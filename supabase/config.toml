@@ -35,3 +35,24 @@ verify_jwt = false
 
 [functions.validate-photo-urls]
 verify_jwt = false
+[functions.update-encarte-estado]
+enabled = true
+verify_jwt = true
+import_map = "./functions/update-encarte-estado/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/update-encarte-estado/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/update-encarte-estado/*.html" ]
+
+[functions.setup-admin]
+enabled = true
+verify_jwt = true
+import_map = "./functions/setup-admin/deno.json"
+# Uncomment to specify a custom file path to the entrypoint.
+# Supported file extensions are: .ts, .js, .mjs, .jsx, .tsx
+entrypoint = "./functions/setup-admin/index.ts"
+# Specifies static files to be bundled with the function. Supports glob patterns.
+# For example, if you want to serve static HTML pages in your function:
+# static_files = [ "./functions/setup-admin/*.html" ]

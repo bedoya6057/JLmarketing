@@ -32,17 +32,22 @@ export const compressImage = async (
   maxHeight: number = 800,
   quality: number = 0.6
 ): Promise<string> => {
+  // Fast skip: if already JPEG and fits size limit, skip canvas round-trip
+  const approxKB = Math.round(dataUrl.length * 0.75 / 1024);
+  if (dataUrl.startsWith('data:image/jpeg') && approxKB < 300) {
+    console.log(`Image already small (${approxKB}KB), skipping compression`);
+    return dataUrl;
+  }
+
   return new Promise((resolve, reject) => {
     const img = new Image();
 
     img.onload = () => {
-      // Calculate new dimensions while maintaining aspect ratio
       let width = img.width;
       let height = img.height;
 
       if (width > maxWidth || height > maxHeight) {
         const aspectRatio = width / height;
-
         if (width > height) {
           width = maxWidth;
           height = maxWidth / aspectRatio;
@@ -52,10 +57,9 @@ export const compressImage = async (
         }
       }
 
-      // Create canvas and draw resized image
       const canvas = document.createElement('canvas');
-      canvas.width = width;
-      canvas.height = height;
+      canvas.width = Math.round(width);
+      canvas.height = Math.round(height);
 
       const ctx = canvas.getContext('2d');
       if (!ctx) {
@@ -63,29 +67,20 @@ export const compressImage = async (
         return;
       }
 
-      // Use better image smoothing
+      // 'medium' is significantly faster than 'high' with minimal visual difference
       ctx.imageSmoothingEnabled = true;
-      ctx.imageSmoothingQuality = 'high';
+      ctx.imageSmoothingQuality = 'medium';
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
 
-      ctx.drawImage(img, 0, 0, width, height);
-
-      // Convert to compressed JPEG
       const compressedDataUrl = canvas.toDataURL('image/jpeg', quality);
-
-      // Log compression stats
       const originalSize = dataUrl.length;
       const compressedSize = compressedDataUrl.length;
-      const reduction = ((originalSize - compressedSize) / originalSize * 100).toFixed(1);
-
-      console.log(`Image compressed: ${(originalSize / 1024).toFixed(0)}KB → ${(compressedSize / 1024).toFixed(0)}KB (${reduction}% reduction)`);
+      console.log(`Compressed: ${(originalSize / 1024).toFixed(0)}KB → ${(compressedSize / 1024).toFixed(0)}KB`);
 
       resolve(compressedDataUrl);
     };
 
-    img.onerror = () => {
-      reject(new Error('Failed to load image'));
-    };
-
+    img.onerror = () => reject(new Error('Failed to load image'));
     img.src = dataUrl;
   });
 };

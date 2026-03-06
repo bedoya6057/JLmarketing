@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.andres.clone',
-  appName: 'Clone',
+  appName: 'JLMarketing',
   webDir: 'dist',
   plugins: {
     CapacitorHttp: {

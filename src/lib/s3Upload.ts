@@ -1,6 +1,5 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { supabase } from "@/integrations/supabase/client";
 
-// Ensure keys are safely fetched from Vite env
 const REGION = "us-east-2";
 const BUCKET_NAME = "encartes-jlmarketing-fotos2026";
 
@@ -9,60 +8,46 @@ export const uploadPhotoToS3 = async (
     fileName: string
 ): Promise<string | null> => {
     try {
-        const s3Client = new S3Client({
-            region: REGION,
-            credentials: {
-                accessKeyId: import.meta.env.VITE_AWS_ACCESS_KEY_ID || process.env.VITE_AWS_ACCESS_KEY_ID || '',
-                secretAccessKey: import.meta.env.VITE_AWS_SECRET_ACCESS_KEY || process.env.VITE_AWS_SECRET_ACCESS_KEY || ''
-            }
-        });
-
-        let bodyData: Uint8Array | Blob;
+        let base64: string;
         let contentType = "image/jpeg";
 
         if (typeof fileData === "string") {
-            const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,(.+)$/);
-
-            if (matches && matches.length === 3) {
+            // Already a data URI or base64 string — pass directly
+            base64 = fileData;
+            const matches = fileData.match(/^data:([A-Za-z-+\/]+);base64,/);
+            if (matches) {
                 contentType = matches[1];
-                const b64Data = matches[2];
-                const byteString = atob(b64Data);
-                const arrayBuffer = new ArrayBuffer(byteString.length);
-                const uint8Array = new Uint8Array(arrayBuffer);
-
-                for (let i = 0; i < byteString.length; i++) {
-                    uint8Array[i] = byteString.charCodeAt(i);
-                }
-
-                bodyData = uint8Array; // Pass raw Uint8Array instead of Blob to avoid getsReader error
-            } else {
-                // Fallback for valid non-data URLs
-                const res = await fetch(fileData);
-                const arrayBuffer = await res.arrayBuffer();
-                bodyData = new Uint8Array(arrayBuffer);
-
-                if (fileData.startsWith("data:image/png")) contentType = "image/png";
-                if (fileData.startsWith("data:image/webp")) contentType = "image/webp";
             }
-        } else if (fileData instanceof Blob) {
-            const arrayBuffer = await fileData.arrayBuffer();
-            bodyData = new Uint8Array(arrayBuffer);
+        } else if (fileData instanceof Blob || fileData instanceof File) {
+            // Convert Blob/File to base64
             contentType = fileData.type || "image/jpeg";
+            const arrayBuffer = await fileData.arrayBuffer();
+            const uint8Array = new Uint8Array(arrayBuffer);
+            let binary = "";
+            for (let i = 0; i < uint8Array.byteLength; i++) {
+                binary += String.fromCharCode(uint8Array[i]);
+            }
+            base64 = `data:${contentType};base64,${btoa(binary)}`;
         } else {
-            bodyData = fileData as any;
+            throw new Error("Unsupported fileData type");
         }
 
-        const command = new PutObjectCommand({
-            Bucket: BUCKET_NAME,
-            Key: fileName,
-            Body: bodyData,
-            ContentType: contentType,
-            // ACL: 'public-read' // Only if bucket allows ACLs, usually bucket policy is better
+        // Call the Supabase Edge Function instead of uploading directly to S3
+        // This avoids CORS and CapacitorHttp signature issues on Android
+        const { data, error } = await supabase.functions.invoke("upload-photo-s3", {
+            body: { base64, fileName, contentType },
         });
 
-        await s3Client.send(command);
+        if (error) {
+            console.error("Error calling upload-photo-s3 function:", error);
+            throw new Error(`Error S3: ${error.message || error}`);
+        }
 
-        return `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
+        if (!data?.success) {
+            throw new Error(`Error S3: ${data?.error || "Upload failed"}`);
+        }
+
+        return data.url ?? `https://${BUCKET_NAME}.s3.${REGION}.amazonaws.com/${fileName}`;
     } catch (error: any) {
         console.error("Error uploading photo to AWS S3:", error);
         throw new Error(`Error S3: ${error.message || error}`);

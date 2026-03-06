@@ -1248,47 +1248,25 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
         return;
       }
 
-      // Step 3: Update encarte with foto_registro (non-blocking - encuestadores may not have UPDATE permission)
-      try {
-        eventLogger.log(EventType.INFO, 'Actualizando encarte con foto de registro', {
-          context: { encarteId: selectedEncarte }
-        });
-
-        await withRetry(
-          async () => {
-            const { error: updateError } = await supabase
-              .from("encartes")
-              .update({ foto_registro: uploadedFotoIngresoUrl, tienda: nombreTienda })
-              .eq("id", selectedEncarte);
-
-            if (updateError) {
-              throw updateError;
-            }
-          },
-          {
-            maxRetries: 2,
-            onRetry: (attempt) => {
-              console.log(`Reintentando actualizar encarte (intento ${attempt})...`);
-            }
-          }
-        );
-      } catch (encarteUpdateError: any) {
-        // Non-critical: encuestadores may lack UPDATE permission on encartes table
-        console.warn("No se pudo actualizar encarte (posiblemente sin permisos):", encarteUpdateError?.message);
-        eventLogger.log(EventType.INFO, 'Encarte update skipped (RLS)', {
-          context: { encarteId: selectedEncarte, error: encarteUpdateError?.message }
-        });
-      }
-
-      // Step 4: Save progress
-      eventLogger.log(EventType.INFO, 'Guardando progreso inicial', {
-        context: { encarteId: selectedEncarte, userId: session.user.id }
-      });
-
       setFotoIngresoUrl(uploadedFotoIngresoUrl);
       setHasStarted(true);
 
-      await saveProgress({
+      // Steps 3 & 4: Run encarte update and saveProgress in PARALLEL to cut wait time
+      const updateEncartePromise = withRetry(
+        async () => {
+          const { error: updateError } = await supabase
+            .from("encartes")
+            .update({ foto_registro: uploadedFotoIngresoUrl, tienda: nombreTienda })
+            .eq("id", selectedEncarte);
+          if (updateError) throw updateError;
+        },
+        { maxRetries: 2 }
+      ).catch((encarteUpdateError: any) => {
+        // Non-critical: encuestadores may lack UPDATE permission on encartes table
+        console.warn("No se pudo actualizar encarte (RLS):", encarteUpdateError?.message);
+      });
+
+      const saveProgressPromise = saveProgress({
         has_started: true,
         foto_ingreso_url: uploadedFotoIngresoUrl,
         tienda: nombreTienda,
@@ -1299,6 +1277,8 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
         selected_macrocategoria: selectedMacrocategoria,
         selected_microcategoria: selectedMicrocategoria,
       });
+
+      await Promise.all([updateEncartePromise, saveProgressPromise]);
 
       eventLogger.log(EventType.SAVE_SUCCESS, 'Registro iniciado correctamente', {
         context: { encarteId: selectedEncarte, tienda: nombreTienda, userId: session.user.id }

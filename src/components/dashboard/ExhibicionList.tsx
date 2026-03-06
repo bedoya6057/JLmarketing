@@ -61,7 +61,7 @@ export const ExhibicionList = () => {
   const handleDelete = async (id: string) => {
     try {
       toast.info("Eliminando exhibición, esto puede tomar un momento...");
-      
+
       // Delete respuestas_exhibicion in batches to avoid timeout
       let hasMoreRespuestas = true;
       while (hasMoreRespuestas) {
@@ -70,7 +70,7 @@ export const ExhibicionList = () => {
           .select("id")
           .eq("exhibicion_id", id)
           .limit(100);
-        
+
         if (!respuestas || respuestas.length === 0) {
           hasMoreRespuestas = false;
         } else {
@@ -91,7 +91,7 @@ export const ExhibicionList = () => {
           .select("id")
           .eq("exhibicion_id", id)
           .limit(100);
-        
+
         if (!productos || productos.length === 0) {
           hasMoreProductos = false;
         } else {
@@ -124,17 +124,21 @@ export const ExhibicionList = () => {
 
   const handleConclude = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from("exhibiciones")
-        .update({ estado: "concluido" })
-        .eq("id", id);
+      const { data, error } = await supabase.functions.invoke("update-encarte-estado", {
+        body: { id, tipo: "exhibiciones", estado: "concluido" },
+      });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(error.message || "Error devuelto por la función Edge");
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       toast.success("Exhibición marcada como concluida - ya no aparecerá para encuestadores");
       // Update local state to show new status instead of removing
-      setExhibiciones(prev => 
-        prev.map(e => 
+      setExhibiciones(prev =>
+        prev.map(e =>
           e.id === id ? { ...e, estado: "concluido" } : e
         )
       );
@@ -219,11 +223,11 @@ export const ExhibicionList = () => {
                 <Badge
                   variant={
                     exhibicion.estado === "concluido" ? "default" :
-                    exhibicion.estado === "completado" ? "outline" : "secondary"
+                      exhibicion.estado === "completado" ? "outline" : "secondary"
                   }
                 >
                   {exhibicion.estado === "concluido" ? "Concluido" :
-                   exhibicion.estado === "completado" ? "Completado" : "En Progreso"}
+                    exhibicion.estado === "completado" ? "Completado" : "En Progreso"}
                 </Badge>
                 <div className="flex items-center gap-1">
                   {exhibicion.estado !== "concluido" && (

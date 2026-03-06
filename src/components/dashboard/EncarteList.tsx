@@ -43,14 +43,14 @@ export const EncarteList = () => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       setUserId(user?.id ?? null);
-      
+
       if (user) {
         const { data: userRole } = await supabase
           .from("user_roles")
           .select("role")
           .eq("user_id", user.id)
           .single();
-        
+
         if (userRole) {
           setUserRole(userRole.role);
         }
@@ -72,7 +72,7 @@ export const EncarteList = () => {
         toast.error(`Error al cargar encartes: ${error.message}`);
         throw error;
       }
-      
+
       console.log("Encartes cargados:", data?.length || 0);
       setEncartes(data || []);
     } catch (error: any) {
@@ -85,10 +85,10 @@ export const EncarteList = () => {
 
   const handleDelete = async (encarteId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    
+
     try {
       console.log('Iniciando eliminación del encarte:', encarteId);
-      
+
       // Delete all related respuestas (registros del encarte)
       console.log('Eliminando respuestas...');
       const { error: respuestasError } = await supabase
@@ -118,10 +118,10 @@ export const EncarteList = () => {
       console.log('Encarte eliminado exitosamente');
 
       toast.success("Encarte eliminado correctamente");
-      
+
       // Update the local state immediately
       setEncartes(prevEncartes => prevEncartes.filter(e => e.id !== encarteId));
-      
+
       // Also reload from database to ensure consistency
       await loadEncartes();
     } catch (error: any) {
@@ -132,17 +132,21 @@ export const EncarteList = () => {
 
   const handleConclude = async (encarteId: string) => {
     try {
-      const { error } = await supabase
-        .from("encartes")
-        .update({ estado: "concluido" })
-        .eq("id", encarteId);
+      const { data, error } = await supabase.functions.invoke("update-encarte-estado", {
+        body: { id: encarteId, tipo: "encartes", estado: "concluido" },
+      });
 
-      if (error) throw error;
+      if (error) {
+        throw new Error(error.message || "Error devuelto por la función Edge");
+      }
+      if (data?.error) {
+        throw new Error(data.error);
+      }
 
       toast.success("Encarte marcado como concluido - ya no aparecerá para encuestadores");
       // Update local state to show new status instead of removing
-      setEncartes(prevEncartes => 
-        prevEncartes.map(e => 
+      setEncartes(prevEncartes =>
+        prevEncartes.map(e =>
           e.id === encarteId ? { ...e, estado: "concluido" } : e
         )
       );
@@ -215,12 +219,12 @@ export const EncarteList = () => {
                   <div className="flex items-center gap-1 flex-shrink-0">
                     <Badge
                       variant={
-                        encarte.estado === "concluido" ? "default" : 
-                        encarte.estado === "completado" ? "outline" : "secondary"
+                        encarte.estado === "concluido" ? "default" :
+                          encarte.estado === "completado" ? "outline" : "secondary"
                       }
                     >
-                      {encarte.estado === "concluido" ? "Concluido" : 
-                       encarte.estado === "completado" ? "Completado" : "En Progreso"}
+                      {encarte.estado === "concluido" ? "Concluido" :
+                        encarte.estado === "completado" ? "Completado" : "En Progreso"}
                     </Badge>
                     {userId && (userRole === 'admin' || encarte.created_by === userId) && encarte.estado !== "concluido" && (
                       <Button
@@ -292,7 +296,7 @@ export const EncarteList = () => {
           <AlertDialogHeader>
             <AlertDialogTitle>¿Marcar encarte como concluido?</AlertDialogTitle>
             <AlertDialogDescription>
-              Este encarte ya no aparecerá en la lista de estudios disponibles para los encuestadores. 
+              Este encarte ya no aparecerá en la lista de estudios disponibles para los encuestadores.
               Los datos recopilados se mantendrán en el sistema.
             </AlertDialogDescription>
           </AlertDialogHeader>
