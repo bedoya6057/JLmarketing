@@ -133,7 +133,7 @@ const EncarteDetail = () => {
           "AÑO", "MES_COD", "MES", "FECHA", "HORA_CREACION", "ENCARTE", "ENCARGADO", "ENCARGADO 2",
           "CIUDAD/CADENA", "CIUDAD", "BANDERA", "TIENDA", "MACROCATEGORIA", "CATEGORIA",
           "COD INTERNO", "PRODUCTO", "PRECIO ENCARTE", "PRECIO ENCONTRADO", "PRECIO TARJETA",
-          "PRESENCIA PRODUCTO", "PRESENCIA CARTEL", "PRESENCIA CARTEL CON TARJETA",
+          "PRESENCIA PRODUCTO", "MOTIVO AUSENCIA", "PRESENCIA CARTEL", "TIPO LEGAL", "PRESENCIA CARTEL CON TARJETA",
           "OBS 1", "FOTO", "FOTO REGISTRO"
         ],
         ...allRespuestas.map((resp: any) => [
@@ -144,7 +144,9 @@ const EncarteDetail = () => {
           resp.tienda || "", resp.macrocategoria || "", resp.categoria || "",
           resp.cod_interno || "", resp.producto || "", resp.precio_encarte || "",
           resp.precio_encontrado || "", resp.precio_tarjeta || "",
-          resp.presencia_producto ? "Sí" : "No", resp.presencia_cartel ? "Sí" : "No",
+          resp.presencia_producto ? "Sí" : "No", resp.motivo_ausencia || "",
+          resp.presencia_cartel ? "Sí" : "No",
+          resp.cartel_tipo_legal || "",
           resp.presencia_cartel_con_tarjeta ? "Sí" : "No",
           resp.obs_1 || "", resp.foto || "", resp.foto_registro || ""
         ])
@@ -206,7 +208,7 @@ const EncarteDetail = () => {
           "ENCARTE_ID", "AÑO", "MES_COD", "MES", "FECHA", "HORA_CREACION", "ENCARTE", "ENCARGADO", "ENCARGADO 2",
           "CIUDAD/CADENA", "CIUDAD", "BANDERA", "TIENDA", "MACROCATEGORIA", "CATEGORIA",
           "COD INTERNO", "PRODUCTO", "PRECIO ENCARTE", "PRECIO ENCONTRADO", "PRECIO TARJETA",
-          "PRESENCIA PRODUCTO", "PRESENCIA CARTEL", "PRESENCIA CARTEL CON TARJETA",
+          "PRESENCIA PRODUCTO", "MOTIVO AUSENCIA", "PRESENCIA CARTEL", "TIPO LEGAL", "PRESENCIA CARTEL CON TARJETA",
           "OBS 1", "FOTO", "FOTO REGISTRO", "CREATED_AT"
         ],
         ...allRespuestas.map((resp: any) => [
@@ -217,7 +219,9 @@ const EncarteDetail = () => {
           resp.tienda || "", resp.macrocategoria || "", resp.categoria || "",
           resp.cod_interno || "", resp.producto || "", resp.precio_encarte || "",
           resp.precio_encontrado || "", resp.precio_tarjeta || "",
-          resp.presencia_producto ? "Sí" : "No", resp.presencia_cartel ? "Sí" : "No",
+          resp.presencia_producto ? "Sí" : "No", resp.motivo_ausencia || "",
+          resp.presencia_cartel ? "Sí" : "No",
+          resp.cartel_tipo_legal || "",
           resp.presencia_cartel_con_tarjeta ? "Sí" : "No",
           resp.obs_1 || "", resp.foto || "", resp.foto_registro || "", resp.created_at || ""
         ])
@@ -262,19 +266,19 @@ const EncarteDetail = () => {
             <CardHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                   <CardTitle className="text-2xl">{encarte.nombre}</CardTitle>
-                   <CardDescription className="flex items-center gap-4 flex-wrap">
-                     <span className="flex items-center gap-1">
-                       <MapPin className="h-3.5 w-3.5" />
-                       {encarte.ciudad}
-                     </span>
-                     <span className="flex items-center gap-1">
-                       <Calendar className="h-3.5 w-3.5" />
-                       {format(new Date(encarte.fecha), "d 'de' MMMM, yyyy", {
-                         locale: es,
-                       })}
-                     </span>
-                   </CardDescription>
+                  <CardTitle className="text-2xl">{encarte.nombre}</CardTitle>
+                  <CardDescription className="flex items-center gap-4 flex-wrap">
+                    <span className="flex items-center gap-1">
+                      <MapPin className="h-3.5 w-3.5" />
+                      {encarte.ciudad}
+                    </span>
+                    <span className="flex items-center gap-1">
+                      <Calendar className="h-3.5 w-3.5" />
+                      {format(new Date(encarte.fecha), "d 'de' MMMM, yyyy", {
+                        locale: es,
+                      })}
+                    </span>
+                  </CardDescription>
                 </div>
                 <Badge variant={encarte.estado === "completado" ? "default" : "secondary"}>
                   {encarte.estado === "completado" ? "Completado" : "En Progreso"}
@@ -304,7 +308,7 @@ const EncarteDetail = () => {
                   </div>
                 </div>
               ) : userRole === "encuestador" ? (
-                <EncuestadorForm 
+                <EncuestadorForm
                   isOnline={isOnline}
                   syncTrigger={syncTrigger}
                   onSyncRequest={() => setSyncTrigger(prev => prev + 1)}

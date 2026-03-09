@@ -127,7 +127,7 @@ const Dashboard = () => {
           "CIUDAD/CADENA", "CIUDAD", "BANDERA", "TIENDA", "MACROCATEGORIA",
           "CATEGORIA", "COD INTERNO", "PRODUCTO", "PRECIO ENCARTE",
           "PRECIO ENCONTRADO", "PRECIO TARJETA", "PRESENCIA PRODUCTO",
-          "PRESENCIA CARTEL", "OBS 1", "FOTO", "FOTO REGISTRO", "FOTO SALIDA"
+          "MOTIVO AUSENCIA", "PRESENCIA CARTEL", "TIPO LEGAL", "OBS 1", "FOTO", "FOTO REGISTRO", "FOTO SALIDA"
         ],
         ...respuestas.map((resp: any) => [
           resp.año || "", resp.mes_cod || "", resp.mes || "", resp.fecha || "",
@@ -136,7 +136,9 @@ const Dashboard = () => {
           resp.tienda || "", resp.macrocategoria || "", resp.categoria || "",
           resp.cod_interno || "", resp.producto || "", resp.precio_encarte || "",
           resp.precio_encontrado || "", resp.precio_tarjeta || "",
-          resp.presencia_producto ? "Sí" : "No", resp.presencia_cartel ? "Sí" : "No",
+          resp.presencia_producto ? "Sí" : "No", resp.motivo_ausencia || "",
+          resp.presencia_cartel ? "Sí" : "No",
+          resp.cartel_tipo_legal || "",
           resp.obs_1 || "", resp.foto || "", resp.foto_registro || "",
           fotoSalidaMap[`${resp.encarte_id}_${resp.tienda}`] || ""
         ])

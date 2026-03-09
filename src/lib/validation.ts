@@ -6,6 +6,8 @@ export const respuestaSchema = z.object({
   presencia_producto: z.boolean(),
   presencia_cartel: z.boolean().optional(),
   presencia_cartel_con_tarjeta: z.boolean().optional(),
+  cartel_tipo_legal: z.string().max(50).optional().nullable(),
+  motivo_ausencia: z.string().max(100).optional().nullable(),
   cartel_presenta_precio: z.boolean().optional(),
   precio_encontrado: z.number().min(0).max(9999999).optional().nullable(),
   precio_tarjeta: z.number().min(0).max(9999999).optional().nullable(),

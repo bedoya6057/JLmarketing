@@ -143,6 +143,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
     motivo_ausencia: "",
     presencia_cartel: null as boolean | null,
     cartel_presenta_precio: false,
+    cartel_tipo_legal: "",
     precio_tarjeta: "",
     ubicacion_sku: "",
     observacion_1: "",
@@ -612,6 +613,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
         motivo_ausencia: "",
         presencia_cartel: null,
         cartel_presenta_precio: false,
+        cartel_tipo_legal: "",
         precio_tarjeta: "",
         ubicacion_sku: "",
         observacion_1: "",
@@ -1386,6 +1388,11 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
       return;
     }
 
+    if (formData.presencia_cartel === true && !formData.cartel_tipo_legal) {
+      toast.error("Por favor selecciona el tipo de legal");
+      return;
+    }
+
     // Solo requerir foto si hay presencia del producto
     if (!showSkippedReview && formData.presencia_producto && !formData.foto_producto) {
       toast.error("Por favor captura la foto del producto");
@@ -1463,6 +1470,8 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
         precio_encontrado: precioValue,
         presencia_producto: formData.presencia_producto,
         presencia_cartel: formData.presencia_cartel,
+        cartel_tipo_legal: formData.cartel_tipo_legal || null,
+        motivo_ausencia: formData.presencia_producto === false ? formData.motivo_ausencia : null,
         cartel_presenta_precio: formData.cartel_presenta_precio,
         precio_tarjeta: formData.precio_tarjeta ? parseFloat(formData.precio_tarjeta) : null,
         ubicacion_sku: formData.ubicacion_sku?.substring(0, 500) || null,
@@ -1661,6 +1670,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
         motivo_ausencia: "",
         presencia_cartel: null,
         cartel_presenta_precio: false,
+        cartel_tipo_legal: "",
         precio_tarjeta: "",
         ubicacion_sku: "",
         observacion_1: "",
@@ -1796,6 +1806,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
       motivo_ausencia: "",
       presencia_cartel: null,
       cartel_presenta_precio: false,
+      cartel_tipo_legal: "",
       precio_tarjeta: "",
       ubicacion_sku: "",
       observacion_1: "",
@@ -2289,6 +2300,24 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
               </RadioGroup>
             </div>
 
+            {formData.presencia_cartel === true && (
+              <div className="space-y-2 rounded-md border p-3 bg-muted/30 border-blue-200">
+                <Label htmlFor="cartel_tipo_legal" className="text-blue-600 font-medium">Tipo de Legal *</Label>
+                <Select
+                  value={formData.cartel_tipo_legal}
+                  onValueChange={(value) => setFormData({ ...formData, cartel_tipo_legal: value })}
+                >
+                  <SelectTrigger id="cartel_tipo_legal" className="border-blue-200 focus:ring-blue-500">
+                    <SelectValue placeholder="Selecciona tipo de legal" />
+                  </SelectTrigger>
+                  <SelectContent className="bg-background z-50">
+                    <SelectItem value="Cuenta con Legal">Cuenta con Legal</SelectItem>
+                    <SelectItem value="Sin Legal">Sin Legal</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+
             <div className="flex items-center space-x-2">
               <Checkbox
                 id="cartel_presenta_precio"
@@ -2606,6 +2635,24 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
               </div>
             </RadioGroup>
           </div>
+
+          {formData.presencia_cartel === true && (
+            <div className="space-y-2 rounded-md border p-3 bg-muted/30 border-blue-200">
+              <Label htmlFor="cartel_tipo_legal_main" className="text-blue-600 font-medium">Tipo de Legal *</Label>
+              <Select
+                value={formData.cartel_tipo_legal}
+                onValueChange={(value) => setFormData({ ...formData, cartel_tipo_legal: value })}
+              >
+                <SelectTrigger id="cartel_tipo_legal_main" className="border-blue-200 focus:ring-blue-500">
+                  <SelectValue placeholder="Selecciona tipo de legal" />
+                </SelectTrigger>
+                <SelectContent className="bg-background z-50">
+                  <SelectItem value="Cuenta con Legal">Cuenta con Legal</SelectItem>
+                  <SelectItem value="Sin Legal">Sin Legal</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
 
           <div className="flex items-center space-x-2">
             <Checkbox
