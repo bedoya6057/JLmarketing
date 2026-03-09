@@ -40,6 +40,8 @@ const ALLOWED_COLUMNS = new Set([
   "supervisor",
   "cumplimiento_carteles",
   "precio_ok",
+  "cartel_tipo_legal",
+  "motivo_ausencia",
 ]);
 
 interface RespuestaPayload {
@@ -77,7 +79,7 @@ Deno.serve(async (req) => {
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       console.error("Missing Authorization header");
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: "Missing Authorization header",
         error_code: "AUTH_MISSING",
         // V.21 compatibility: also return success/errors format
@@ -103,7 +105,7 @@ Deno.serve(async (req) => {
     const { data: userData, error: userError } = await anonClient.auth.getUser();
     if (userError || !userData?.user) {
       console.error("Invalid JWT or user not found:", userError?.message);
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: "Invalid or expired token",
         error_code: "AUTH_INVALID",
         error_details: userError?.message,
@@ -127,7 +129,7 @@ Deno.serve(async (req) => {
       body = await req.json();
     } catch (parseErr) {
       console.error("Failed to parse request body:", parseErr);
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: "Invalid JSON body",
         error_code: "PARSE_ERROR",
         success: 0,
@@ -143,7 +145,7 @@ Deno.serve(async (req) => {
     const { respuestas } = body;
 
     if (!respuestas || !Array.isArray(respuestas) || respuestas.length === 0) {
-      return new Response(JSON.stringify({ 
+      return new Response(JSON.stringify({
         error: "No respuestas provided",
         error_code: "NO_DATA",
         success: 0,
@@ -172,13 +174,13 @@ Deno.serve(async (req) => {
     for (const respuesta of respuestas) {
       const productoId = respuesta.producto_id || "unknown";
       const tienda = String(respuesta.tienda || "unknown");
-      
+
       try {
         // Sanitize payload: only keep allowed columns
         const sanitizedPayload: Record<string, unknown> = {
           created_by: userId, // Always force authenticated user
         };
-        
+
         for (const [key, value] of Object.entries(respuesta)) {
           if (ALLOWED_COLUMNS.has(key) && value !== undefined) {
             sanitizedPayload[key] = value;
@@ -225,20 +227,20 @@ Deno.serve(async (req) => {
         results.errors++;
         const errorMsg = err instanceof Error ? err.message : String(err);
         const errorCode = (err as any)?.code || "UNKNOWN";
-        
+
         results.failed.push({
           producto_id: productoId,
           tienda,
           error_code: errorCode,
           error_message: errorMsg.substring(0, 500),
         });
-        
+
         console.error(`Error syncing respuesta ${productoId}:`, errorMsg);
       }
     }
 
     console.log(`Sync complete: ${results.success} success, ${results.errors} errors`);
-    
+
     // Log first few errors for debugging
     if (results.failed.length > 0) {
       console.log("First 3 errors:", JSON.stringify(results.failed.slice(0, 3)));
@@ -251,7 +253,7 @@ Deno.serve(async (req) => {
   } catch (err: unknown) {
     const errorMsg = err instanceof Error ? err.message : String(err);
     console.error("Unexpected error:", errorMsg);
-    return new Response(JSON.stringify({ 
+    return new Response(JSON.stringify({
       error: errorMsg,
       error_code: "SERVER_ERROR",
       success: 0,
