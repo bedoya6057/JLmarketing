@@ -24,7 +24,7 @@ import { offlineStorage } from "@/lib/offlineStorage";
 import { NetworkStatus } from "@/components/NetworkStatus";
 import { OfflineReadyIndicator } from "@/components/OfflineReadyIndicator";
 import { SyncProgressIndicator } from "@/components/SyncProgressIndicator";
-import { debounce } from "@/lib/retryLogic";
+import { debounce, withRetry } from "@/lib/retryLogic";
 import { eventLogger, EventType, EventSeverity } from "@/lib/eventLogger";
 import { generatePhotoFileName, generateIngresoPhotoFileName } from "@/lib/fileNaming";
 import { uploadPhotoToS3 } from "@/lib/s3Upload";
@@ -962,8 +962,21 @@ export const EncuestadorExhibicionForm = ({ isOnline, syncTrigger, onSyncRequest
       const compressedDataUrl = await compressImageFile(file);
 
       if (isOnline) {
-        const s3Url = await uploadPhotoToS3(compressedDataUrl, fileName);
-        if (!s3Url) throw new Error("AWS S3 Upload Failed");
+        const fileName = generateIngresoPhotoFileName(selectedTienda, userId);
+
+        const { data: s3Url, error: uploadError } = await withRetry(
+          async () => {
+            const result = await uploadPhotoToS3(compressedDataUrl, fileName);
+            if (!result) throw new Error("AWS S3 Upload Failed");
+            return { data: result, error: null };
+          },
+          {
+            maxRetries: 3,
+            onRetry: (attempt) => console.log(`Reintentando subir foto de ingreso a S3 (intento ${attempt})...`)
+          }
+        );
+
+        if (uploadError) throw uploadError;
 
         setFotoIngreso(s3Url);
         setFotoIngresoUrl(s3Url);
@@ -997,8 +1010,21 @@ export const EncuestadorExhibicionForm = ({ isOnline, syncTrigger, onSyncRequest
       const compressedDataUrl = await compressImageFile(file);
 
       if (isOnline) {
-        const s3Url = await uploadPhotoToS3(compressedDataUrl, fileName);
-        if (!s3Url) throw new Error("AWS S3 Upload Failed");
+        const fileName = generatePhotoFileName(selectedTienda, currentProducto.cod_producto, userId, 'exhibicion');
+
+        const { data: s3Url, error: uploadError } = await withRetry(
+          async () => {
+            const result = await uploadPhotoToS3(compressedDataUrl, fileName);
+            if (!result) throw new Error("AWS S3 Upload Failed");
+            return { data: result, error: null };
+          },
+          {
+            maxRetries: 3,
+            onRetry: (attempt) => console.log(`Reintentando subir foto de producto a S3 (intento ${attempt})...`)
+          }
+        );
+
+        if (uploadError) throw uploadError;
 
         setFoto(s3Url);
         setFotoUrl(s3Url);
