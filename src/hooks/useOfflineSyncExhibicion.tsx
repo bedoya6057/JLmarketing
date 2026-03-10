@@ -4,7 +4,7 @@ import { offlineStorage } from "@/lib/offlineStorage";
 import { base64ToBlob, isAlreadyCompressed, compressImage } from "@/lib/imageCompression";
 import { toast } from "sonner";
 import { eventLogger, EventType, EventSeverity } from "@/lib/eventLogger";
-import { generatePhotoFileName } from "@/lib/fileNaming";
+import { generatePhotoFileName, generateIngresoPhotoFileName } from "@/lib/fileNaming";
 import { uploadPhotoToS3 } from "@/lib/s3Upload";
 
 const BATCH_SIZE = 20; // Sync in batches of 20 items
@@ -91,10 +91,14 @@ export const useOfflineSyncExhibicion = (
               context: { exhibicionId, productoId: respuesta.productoId, fotoUrl },
             });
           } else {
-            eventLogger.log(EventType.PHOTO_UPLOAD, "Error subiendo foto offline", {
+            eventLogger.log(EventType.PHOTO_UPLOAD, "Error subiendo foto offline - abortando este registro", {
               severity: EventSeverity.ERROR,
               context: { exhibicionId, productoId: respuesta.productoId },
             });
+            // CRITICAL: Abort this specific item so it stays in offlineStorage for retry
+            errors++;
+            setErrorCount(prev => prev + 1);
+            continue;
           }
         }
 
@@ -112,6 +116,27 @@ export const useOfflineSyncExhibicion = (
         });
 
         if (error && !error.message.includes('duplicate')) throw error;
+
+        // Si hay una foto de registro en base64, intentar subirla también (aunque es menos común en este flujo)
+        if (respuesta.data.foto_registro?.startsWith("data:")) {
+          const tienda = respuesta.data?.tienda || '';
+          const fileName = generateIngresoPhotoFileName(tienda, syncUserId);
+          const s3Url = await uploadPhoto(respuesta.data.foto_registro, fileName);
+          if (s3Url) {
+            // Actualizar el registro en Supabase con la nueva URL
+            await supabase.from("respuestas_exhibicion").update({
+              foto_registro: s3Url
+            }).eq("exhibicion_id", exhibicionId)
+              .eq("producto_id", respuesta.productoId)
+              .eq("tienda", tienda)
+              .eq("created_by", syncUserId)
+              .eq("fecha", respuesta.data.fecha);
+          } else {
+            // No abortamos por foto_registro que falle (es secundaria), 
+            // pero logueamos el error
+            console.warn("Fallo subida de foto_registro offline para", respuesta.productoId);
+          }
+        }
 
         await offlineStorage.deleteRespuestaExhibicion(respuesta.id);
         success++;
@@ -199,8 +224,21 @@ export const useOfflineSyncExhibicion = (
       if (pendingProgreso && !pendingProgreso.synced) {
         try {
           // Manual select+update/insert to avoid 42P10 upsert cache issues
+          let fotoIngresoUrl = pendingProgreso.data.foto_ingreso_url;
+
+          // Si la foto de ingreso está en base64, subirla a S3
+          if (fotoIngresoUrl?.startsWith("data:")) {
+            const tienda = pendingProgreso.data.tienda || '';
+            const fileName = generateIngresoPhotoFileName(tienda, effectiveUserId);
+            const s3Url = await uploadPhoto(fotoIngresoUrl, fileName);
+            if (s3Url) {
+              fotoIngresoUrl = s3Url;
+            }
+          }
+
           const progresoPayload = {
             ...pendingProgreso.data,
+            foto_ingreso_url: fotoIngresoUrl,
             user_id: effectiveUserId,
             exhibicion_id: exhibicionId,
           };

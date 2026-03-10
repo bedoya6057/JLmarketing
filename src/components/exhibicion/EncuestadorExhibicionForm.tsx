@@ -1232,10 +1232,38 @@ export const EncuestadorExhibicionForm = ({ isOnline, syncTrigger, onSyncRequest
 
       if (isOnline) {
         try {
+          let currentFotoIngresoUrl = fotoIngresoUrl;
+
+          // Si la foto de ingreso está en base64 y estamos online, intentar subirla ahora
+          if (currentFotoIngresoUrl?.startsWith("data:")) {
+            try {
+              eventLogger.log(EventType.PHOTO_UPLOAD, "Subiendo foto de ingreso pendiente desde handleSave exhibición", {
+                context: { exhibicionId: selectedExhibicionId, tienda: selectedTienda }
+              });
+
+              const fileName = generateIngresoPhotoFileName(selectedTienda, userId);
+              const result = await uploadPhotoToS3(currentFotoIngresoUrl, fileName);
+
+              if (result) {
+                currentFotoIngresoUrl = result;
+                setFotoIngresoUrl(result); // Actualizar estado local
+              }
+            } catch (uploadError) {
+              console.error("Error uploading pending entry photo in handleSave exhibición:", uploadError);
+              // Continuamos con el base64 si falla la subida
+            }
+          }
+
+          // Actualizar payload con la URL (ya sea la nueva o la anterior)
+          const updatedRespuestaData = {
+            ...respuestaData,
+            foto_registro: currentFotoIngresoUrl
+          };
+
           // Usar upsert para evitar duplicados
           const { error } = await supabase
             .from("respuestas_exhibicion")
-            .upsert(respuestaData, {
+            .upsert(updatedRespuestaData, {
               onConflict: 'exhibicion_id,producto_id,tienda,created_by,fecha',
               ignoreDuplicates: true
             });

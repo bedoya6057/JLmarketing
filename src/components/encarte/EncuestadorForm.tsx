@@ -1518,6 +1518,25 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
           context: { productId: currentProduct.id, encarteId: selectedEncarte }
         });
         try {
+          let currentFotoIngresoUrl = fotoIngresoUrl;
+
+          // Si la foto de ingreso está en base64 y estamos online, intentar subirla ahora
+          if (currentFotoIngresoUrl?.startsWith("data:")) {
+            try {
+              eventLogger.log(EventType.PHOTO_UPLOAD, 'Subiendo foto de ingreso pendiente desde handleSave', {
+                context: { encarteId: selectedEncarte, tienda: nombreTienda }
+              });
+              const uploadedUrl = await uploadPhoto(currentFotoIngresoUrl, "foto_ingreso_recuperada.jpg");
+              if (uploadedUrl) {
+                currentFotoIngresoUrl = uploadedUrl;
+                setFotoIngresoUrl(uploadedUrl); // Actualizar estado local también
+              }
+            } catch (uploadError) {
+              console.error("Error uploading pending entry photo in handleSave:", uploadError);
+              // Continuamos con el base64 si falla la subida, para no perder el dato
+            }
+          }
+
           let fotoProductoUrl = null;
           // Siempre subir foto si existe
           if (formData.foto_producto) {
@@ -1538,6 +1557,7 @@ export const EncuestadorForm = ({ isOnline, syncTrigger, onSyncRequest, saveProg
 
           const respuesta = {
             ...respuestaData,
+            foto_registro: currentFotoIngresoUrl,
             foto: fotoProductoUrl,
           };
 

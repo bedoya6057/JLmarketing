@@ -4,7 +4,7 @@ import { offlineStorage } from "@/lib/offlineStorage";
 import { toast } from "sonner";
 import { eventLogger, EventType } from "@/lib/eventLogger";
 import { base64ToBlob, isAlreadyCompressed, compressImage } from "@/lib/imageCompression";
-import { generatePhotoFileName } from "@/lib/fileNaming";
+import { generatePhotoFileName, generateIngresoPhotoFileName } from "@/lib/fileNaming";
 import { normalizeError } from "@/lib/errorUtils";
 import { uploadPhotoToS3 } from "@/lib/s3Upload";
 const BATCH_SIZE = 20; // Sync in batches of 20 items
@@ -105,16 +105,35 @@ export const useOfflineSync = (encarteId: string, userId: string, isOnline: bool
           const codProducto = item.data?.cod_interno || '';
           const fileName = generatePhotoFileName(tienda, codProducto, syncUserId, 'producto');
           fotoProductoUrl = await uploadPhoto(item.photos.fotoProducto, fileName);
+
+          if (!fotoProductoUrl) {
+            console.error("Photo upload failed for item, aborting sync for this record:", item.productoId);
+            errors++;
+            setErrorCount(prev => prev + 1);
+            continue; // Skip this record so it's not sent to Edge Function or deleted locally
+          }
         }
 
         // Build payload - exclude created_by as edge function will set it
         const { created_by: _ignoredCreatedBy, ...restData } = item.data || {};
+
+        let fotoRegistroUrl = restData.foto_registro;
+        // Si hay una foto de registro en base64, subirla antes de enviar al Edge Function
+        if (fotoRegistroUrl?.startsWith("data:")) {
+          const tienda = restData.tienda || '';
+          const fileName = generateIngresoPhotoFileName(tienda, syncUserId);
+          const uploadedUrl = await uploadPhoto(fotoRegistroUrl, fileName);
+          if (uploadedUrl) {
+            fotoRegistroUrl = uploadedUrl;
+          }
+        }
 
         const payload = {
           encarte_id: item.encarteId,
           producto_id: item.productoId,
           ...restData,
           foto: fotoProductoUrl,
+          foto_registro: fotoRegistroUrl,
         };
 
         payloads.push(payload);
@@ -339,8 +358,21 @@ export const useOfflineSync = (encarteId: string, userId: string, isOnline: bool
       // Sync progreso
       if (pendingProgreso && !pendingProgreso.synced) {
         try {
+          let fotoIngresoUrl = pendingProgreso.data.foto_ingreso_url;
+
+          // Si la foto de ingreso está en base64, subirla a S3
+          if (fotoIngresoUrl?.startsWith("data:")) {
+            const tienda = pendingProgreso.data.tienda || '';
+            const fileName = generateIngresoPhotoFileName(tienda, effectiveUserId);
+            const uploadedUrl = await uploadPhoto(fotoIngresoUrl, fileName);
+            if (uploadedUrl) {
+              fotoIngresoUrl = uploadedUrl;
+            }
+          }
+
           const progresoPayload = {
             ...pendingProgreso.data,
+            foto_ingreso_url: fotoIngresoUrl,
             user_id: effectiveUserId,
             encarte_id: encarteId,
           };
