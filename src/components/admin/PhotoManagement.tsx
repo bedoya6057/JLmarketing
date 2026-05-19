@@ -94,6 +94,74 @@ export const PhotoManagement = () => {
     }
   };
 
+  const handleDirectFixBase64 = async () => {
+    setFixingPhotos(true);
+    try {
+      toast.info("Buscando fotos base64 en la base de datos...");
+      
+      const { data: records, error } = await supabase
+        .from('respuestas_exhibicion')
+        .select('id, foto, tienda, cod_producto')
+        .like('foto', 'data:image%');
+        
+      if (error) throw error;
+      
+      if (!records || records.length === 0) {
+        toast.success("No se encontraron fotos en formato base64");
+        setFixingPhotos(false);
+        return;
+      }
+      
+      toast.info(`Se encontraron ${records.length} fotos base64. Iniciando subida...`);
+      
+      let successCount = 0;
+      let errorCount = 0;
+      
+      for (let i = 0; i < records.length; i++) {
+        const record = records[i];
+        try {
+          // Generar nombre archivo
+          const timestamp = Date.now();
+          const fileName = `fix_base64_${record.tienda || 'tienda'}_${record.cod_producto || 'prod'}_${timestamp}.jpg`;
+          
+          toast.info(`Subiendo foto ${i + 1} de ${records.length}...`);
+          
+          // Subir a S3
+          const newUrl = await uploadPhotoToS3(record.foto, fileName);
+          
+          if (!newUrl) {
+            throw new Error("S3 retornó URL vacía");
+          }
+          
+          // Actualizar en BD
+          const { error: updateError } = await supabase
+            .from('respuestas_exhibicion')
+            .update({ foto: newUrl })
+            .eq('id', record.id);
+            
+          if (updateError) throw updateError;
+          
+          successCount++;
+        } catch (err) {
+          console.error(`Error procesando record ${record.id}:`, err);
+          errorCount++;
+        }
+      }
+      
+      if (errorCount === 0) {
+        toast.success(`¡Éxito! Se subieron y corrigieron ${successCount} fotos base64.`);
+      } else {
+        toast.warning(`Se corrigieron ${successCount} fotos, pero hubo ${errorCount} errores.`);
+      }
+      
+    } catch (error: any) {
+      console.error('Error in direct fix:', error);
+      toast.error('Error en corrección directa: ' + error.message);
+    } finally {
+      setFixingPhotos(false);
+    }
+  };
+
   const handleValidatePhotoUrls = async () => {
     setValidatingUrls(true);
     setValidationProgress({ validated: 0, valid: 0, invalid: 0, total: 0 });
@@ -434,6 +502,20 @@ export const PhotoManagement = () => {
               <Wrench className="mr-2 h-4 w-4" />
             )}
             {fixingPhotos ? "Corrigiendo..." : "Corregir URLs de Fotos"}
+          </Button>
+
+          <Button
+            variant="default"
+            className="bg-green-600 hover:bg-green-700"
+            onClick={handleDirectFixBase64}
+            disabled={fixingPhotos}
+          >
+            {fixingPhotos ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <CheckCircle className="mr-2 h-4 w-4" />
+            )}
+            Solución Directa Base64
           </Button>
 
           <Button

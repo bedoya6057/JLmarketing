@@ -1254,10 +1254,33 @@ export const EncuestadorExhibicionForm = ({ isOnline, syncTrigger, onSyncRequest
             }
           }
 
+          let currentFotoUrl = fotoUrl;
+
+          // Si la foto del producto está en base64 y estamos online, intentar subirla ahora
+          if (currentFotoUrl?.startsWith("data:")) {
+            try {
+              eventLogger.log(EventType.PHOTO_UPLOAD, "Subiendo foto de producto pendiente desde handleSave exhibición", {
+                context: { exhibicionId: selectedExhibicionId, tienda: selectedTienda, codProducto: currentProducto.cod_producto }
+              });
+
+              const fileName = generatePhotoFileName(selectedTienda, currentProducto.cod_producto, userId, 'exhibicion');
+              const result = await uploadPhotoToS3(currentFotoUrl, fileName);
+
+              if (result) {
+                currentFotoUrl = result;
+                setFotoUrl(result); // Actualizar estado local
+              }
+            } catch (uploadError) {
+              console.error("Error uploading pending product photo in handleSave exhibición:", uploadError);
+              // Continuamos con el base64 si falla la subida
+            }
+          }
+
           // Actualizar payload con la URL (ya sea la nueva o la anterior)
           const updatedRespuestaData = {
             ...respuestaData,
-            foto_registro: currentFotoIngresoUrl
+            foto_registro: currentFotoIngresoUrl,
+            foto: currentFotoUrl
           };
 
           // Usar upsert para evitar duplicados
