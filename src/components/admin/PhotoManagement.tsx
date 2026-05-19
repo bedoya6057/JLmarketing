@@ -97,22 +97,29 @@ export const PhotoManagement = () => {
   const handleDirectFixBase64 = async () => {
     setFixingPhotos(true);
     try {
-      toast.info("Buscando fotos base64 en la base de datos...");
+      toast.info("Buscando fotos base64 en la base de datos (últimos 1500 registros)...");
       
-      const { data: records, error } = await supabase
+      const { data: allRecords, error } = await supabase
         .from('respuestas_exhibicion')
-        .select('id, foto, tienda, cod_producto')
-        .like('foto', 'data:image%');
+        .select('id, foto, foto_registro, tienda, cod_producto')
+        .order('created_at', { ascending: false })
+        .limit(1500);
         
       if (error) throw error;
       
-      if (!records || records.length === 0) {
-        toast.success("No se encontraron fotos en formato base64");
+      // Filtrar en memoria por longitud de texto (para atrapar cualquier base64 sin importar el formato exacto)
+      const records = allRecords?.filter(r => 
+        (r.foto && r.foto.length > 500) || 
+        (r.foto_registro && r.foto_registro.length > 500)
+      ) || [];
+      
+      if (records.length === 0) {
+        toast.success("No se encontraron fotos en formato base64 en los registros recientes");
         setFixingPhotos(false);
         return;
       }
       
-      toast.info(`Se encontraron ${records.length} fotos base64. Iniciando subida...`);
+      toast.info(`Se encontraron ${records.length} registros con base64. Iniciando subida...`);
       
       let successCount = 0;
       let errorCount = 0;
@@ -120,28 +127,36 @@ export const PhotoManagement = () => {
       for (let i = 0; i < records.length; i++) {
         const record = records[i];
         try {
-          // Generar nombre archivo
           const timestamp = Date.now();
-          const fileName = `fix_base64_${record.tienda || 'tienda'}_${record.cod_producto || 'prod'}_${timestamp}.jpg`;
+          const updates: any = {};
           
-          toast.info(`Subiendo foto ${i + 1} de ${records.length}...`);
+          toast.info(`Procesando registro ${i + 1} de ${records.length} (${record.tienda})...`);
           
-          // Subir a S3
-          const newUrl = await uploadPhotoToS3(record.foto, fileName);
-          
-          if (!newUrl) {
-            throw new Error("S3 retornó URL vacía");
+          // Verificar y subir 'foto' (producto)
+          if (record.foto && record.foto.length > 500) {
+            const fileName = `fix_base64_prod_${record.tienda || 'tienda'}_${record.cod_producto || 'prod'}_${timestamp}.jpg`;
+            const newUrl = await uploadPhotoToS3(record.foto, fileName);
+            if (newUrl) updates.foto = newUrl;
           }
           
-          // Actualizar en BD
-          const { error: updateError } = await supabase
-            .from('respuestas_exhibicion')
-            .update({ foto: newUrl })
-            .eq('id', record.id);
-            
-          if (updateError) throw updateError;
+          // Verificar y subir 'foto_registro' (ingreso)
+          if (record.foto_registro && record.foto_registro.length > 500) {
+            const fileName = `fix_base64_ingreso_${record.tienda || 'tienda'}_${timestamp}.jpg`;
+            const newUrl = await uploadPhotoToS3(record.foto_registro, fileName);
+            if (newUrl) updates.foto_registro = newUrl;
+          }
           
-          successCount++;
+          if (Object.keys(updates).length > 0) {
+            // Actualizar en BD
+            const { error: updateError } = await supabase
+              .from('respuestas_exhibicion')
+              .update(updates)
+              .eq('id', record.id);
+              
+            if (updateError) throw updateError;
+            successCount++;
+          }
+          
         } catch (err) {
           console.error(`Error procesando record ${record.id}:`, err);
           errorCount++;
@@ -149,9 +164,9 @@ export const PhotoManagement = () => {
       }
       
       if (errorCount === 0) {
-        toast.success(`¡Éxito! Se subieron y corrigieron ${successCount} fotos base64.`);
+        toast.success(`¡Éxito! Se corrigieron ${successCount} registros con fotos base64.`);
       } else {
-        toast.warning(`Se corrigieron ${successCount} fotos, pero hubo ${errorCount} errores.`);
+        toast.warning(`Se corrigieron ${successCount} registros, pero hubo ${errorCount} errores.`);
       }
       
     } catch (error: any) {
