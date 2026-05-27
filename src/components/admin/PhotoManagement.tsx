@@ -95,6 +95,10 @@ export const PhotoManagement = () => {
   };
 
   const handleDirectFixBase64 = async () => {
+    if (!studyType) {
+      toast.error("Por favor seleccione un tipo de estudio primero (Encarte o Exhibicin)");
+      return;
+    }
     setFixingPhotos(true);
     try {
       const tableName = studyType === "encarte" ? "respuestas" : "respuestas_exhibicion";
