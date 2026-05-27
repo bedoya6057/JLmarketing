@@ -97,11 +97,14 @@ export const PhotoManagement = () => {
   const handleDirectFixBase64 = async () => {
     setFixingPhotos(true);
     try {
-      toast.info("Buscando fotos base64 en la base de datos (últimos 1500 registros)...");
+      const tableName = studyType === "encarte" ? "respuestas" : "respuestas_exhibicion";
+      const codeField = studyType === "encarte" ? "cod_interno" : "cod_producto";
+
+      toast.info(`Buscando fotos base64 en la tabla ${tableName} (últimos 1500 registros)...`);
       
       const { data: allRecords, error } = await supabase
-        .from('respuestas_exhibicion')
-        .select('id, foto, foto_registro, tienda, cod_producto')
+        .from(tableName)
+        .select(`id, foto, foto_registro, tienda, ${codeField}`)
         .order('created_at', { ascending: false })
         .limit(1500);
         
@@ -132,9 +135,11 @@ export const PhotoManagement = () => {
           
           toast.info(`Procesando registro ${i + 1} de ${records.length} (${record.tienda})...`);
           
+          const codeValue = studyType === "encarte" ? record.cod_interno : record.cod_producto;
+
           // Verificar y subir 'foto' (producto)
           if (record.foto && record.foto.length > 500) {
-            const fileName = `fix_base64_prod_${record.tienda || 'tienda'}_${record.cod_producto || 'prod'}_${timestamp}.jpg`;
+            const fileName = `fix_base64_prod_${record.tienda || 'tienda'}_${codeValue || 'prod'}_${timestamp}.jpg`;
             const newUrl = await uploadPhotoToS3(record.foto, fileName);
             if (newUrl) updates.foto = newUrl;
           }
@@ -149,7 +154,7 @@ export const PhotoManagement = () => {
           if (Object.keys(updates).length > 0) {
             // Actualizar en BD
             const { error: updateError } = await supabase
-              .from('respuestas_exhibicion')
+              .from(tableName)
               .update(updates)
               .eq('id', record.id);
               
