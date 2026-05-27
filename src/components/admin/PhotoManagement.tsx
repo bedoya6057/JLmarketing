@@ -522,6 +522,24 @@ export const PhotoManagement = () => {
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        <div className="flex items-center gap-4 mb-4">
+          <Label className="font-bold text-sm">Tipo de Estudio para Mantenimiento:</Label>
+          <div className="w-[200px]">
+            <Select
+              value={studyType}
+              onValueChange={(v) => handleStudyTypeChange(v as "encarte" | "exhibicion")}
+            >
+              <SelectTrigger>
+                <SelectValue placeholder="Selecciona tipo" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="encarte">Encarte</SelectItem>
+                <SelectItem value="exhibicion">Exhibición</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" onClick={() => setIsOpen(true)}>
             <Camera className="mr-2 h-4 w-4" />
@@ -620,23 +638,6 @@ export const PhotoManagement = () => {
             </DialogHeader>
 
             <div className="space-y-4">
-              {/* Step 1: Study Type */}
-              <div className="space-y-2">
-                <Label>1. Tipo de Estudio</Label>
-                <Select
-                  value={studyType}
-                  onValueChange={(v) => handleStudyTypeChange(v as "encarte" | "exhibicion")}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecciona tipo de estudio" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="encarte">Encarte</SelectItem>
-                    <SelectItem value="exhibicion">Exhibición</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
               {/* Step 2: Select Study */}
               {studyType && (
                 <div className="space-y-2">
