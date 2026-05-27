@@ -116,6 +116,12 @@ export const PhotoManagement = () => {
         (r.foto_registro && r.foto_registro.length > 500)
       ) || [];
       
+      // Check for nulls explicitly to inform user
+      const nullRecords = allRecords?.filter(r => !r.foto || r.foto.trim() === '') || [];
+      if (nullRecords.length > 0) {
+        toast.warning(`Atencin: Se encontraron ${nullRecords.length} registros que literalmente no tienen foto (campo vaco o nulo) en los ǧltimos 1500.`);
+      }
+
       if (records.length === 0) {
         toast.success("No se encontraron fotos en formato base64 en los registros recientes");
         setFixingPhotos(false);
@@ -183,14 +189,21 @@ export const PhotoManagement = () => {
   };
 
   const handleValidatePhotoUrls = async () => {
+    if (!studyType) {
+      toast.error("Por favor seleccione un tipo de estudio primero");
+      return;
+    }
     setValidatingUrls(true);
     setValidationProgress({ validated: 0, valid: 0, invalid: 0, total: 0 });
     setInvalidUrls([]);
 
     try {
+      const tableName = studyType === "encarte" ? "respuestas" : "respuestas_exhibicion";
+      const codeField = studyType === "encarte" ? "cod_interno" : "cod_producto";
+
       // Get total count first
       const { count } = await supabase
-        .from('respuestas_exhibicion')
+        .from(tableName)
         .select('*', { count: 'exact', head: true })
         .not('foto', 'is', null)
         .neq('foto', '');
@@ -207,8 +220,8 @@ export const PhotoManagement = () => {
       while (offset < total) {
         // Fetch batch
         const { data: records, error } = await supabase
-          .from('respuestas_exhibicion')
-          .select('id, foto, cod_producto, tienda')
+          .from(tableName)
+          .select(`id, foto, tienda, ${codeField}`)
           .not('foto', 'is', null)
           .neq('foto', '')
           .range(offset, offset + batchSize - 1);
@@ -229,7 +242,7 @@ export const PhotoManagement = () => {
               allInvalid.push({
                 id: record.id,
                 foto: record.foto,
-                cod_producto: record.cod_producto || undefined,
+                cod_producto: (studyType === "encarte" ? record.cod_interno : record.cod_producto) || undefined,
                 tienda: record.tienda || undefined
               });
             }
