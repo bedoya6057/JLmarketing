@@ -252,20 +252,44 @@ export const AddEncarteProducts = ({
       );
 
       // Separate: products to update (existing) vs insert (new)
-      const toUpdate: { id: string; microcategoria?: string; macrocategoria?: string }[] = [];
+      const toUpdate: { id: string; updates: any }[] = [];
       const newProducts = csvProducts.filter(p => {
         const code = String(p.cod_interno ?? "").toLowerCase().trim();
         if (code && existingMap.has(code)) {
           const existing = existingMap.get(code)!;
-          // Update microcategoria/macrocategoria if file has them and DB doesn't
-          if (
-            (p.microcategoria && !existing.microcategoria) ||
-            (p.macrocategoria && !existing.macrocategoria)
-          ) {
+          
+          // Build updates object from all non-empty fields in the CSV
+          const updates: any = {};
+          
+          // List of fields to check from the parsed row (we exclude cod_interno as it's the identifier)
+          const fields = [
+            "descripcion_producto_carteleria", "macrocategoria", "microcategoria", "categoria", "division",
+            "precio_encarte", "precio_promo", "precio_regular", "precio_promo_tarjeta", "precio_pack", "precio_pack_tarjeta",
+            "monto_minimo", "mecanica", "nombre_mecanica", "nombre_campana", "formato", "atributo", "pagina",
+            "numero_cartel", "exhibicion", "cabecera", "tipo_requerimiento", "foto_publicar", "cod_gpo_articulo",
+            "fecha_inicio", "fecha_fin", "uxb", "bi_tri_precio", "medio_pago", "descripcion_mecanica_tarjeta",
+            "cuotas", "cantidad_comprar", "gasto_producto", "gasto_financiero", "aporte_col", "promocion_acumulable",
+            "cod_auspiciador", "descripcion_auspiciador", "cant_auspiciador", "codigo_local", "legal", "unidad_limite",
+            "maximo_abierto", "maximo_tarjeta", "condicion_especial", "logo", "tags", "descripcion_col", "medidas",
+            "regalos", "usuario_comercial", "estado_producto", "unidad_medida", "alto_grasas_saturadas", "alto_azucar",
+            "alto_sodio", "contiene_grasas_trans", "estado_carga", "usuario_promociones", "usuario_pricing",
+            "variacion_promocional_abierta", "descripcion_variacion_abierta", "variacion_promocional_tarjeta",
+            "descripcion_variacion_tarjeta", "num_promo", "producto_id", "estado_variacion", "gerente_aprobador",
+            "tipo_promocion", "gasto_total_promos_oh", "gasto_toh", "gasto_comercial_promos_toh", "dp"
+          ];
+
+          for (const field of fields) {
+            // Only update if the CSV has a valid value (not null, not undefined, and not empty string)
+            // For boolean fields (like alto_azucar), they will be true/false so they pass the check
+            if (p[field] !== undefined && p[field] !== null && p[field] !== "") {
+              updates[field] = p[field];
+            }
+          }
+
+          if (Object.keys(updates).length > 0) {
             toUpdate.push({
               id: existing.id,
-              microcategoria: p.microcategoria || existing.microcategoria,
-              macrocategoria: p.macrocategoria || existing.macrocategoria,
+              updates
             });
           }
           return false; // don't insert
@@ -273,12 +297,12 @@ export const AddEncarteProducts = ({
         return true;
       });
 
-      // Update existing products with microcategoria/macrocategoria
+      // Update existing products with new data
       let updatedCount = 0;
       for (const item of toUpdate) {
         const { error: updateError } = await supabase
           .from("productos")
-          .update({ microcategoria: item.microcategoria, macrocategoria: item.macrocategoria })
+          .update(item.updates)
           .eq("id", item.id);
         if (!updateError) updatedCount++;
       }
@@ -384,7 +408,7 @@ export const AddEncarteProducts = ({
 
       const parts = [];
       if (newProducts.length > 0) parts.push(`${newProducts.length} productos agregados`);
-      if (updatedCount > 0) parts.push(`${updatedCount} actualizados con microcategoría`);
+      if (updatedCount > 0) parts.push(`${updatedCount} actualizados con nuevos datos`);
       toast.success(parts.join(', '));
       setCsvProducts([]);
       setOpen(false);
@@ -441,7 +465,7 @@ export const AddEncarteProducts = ({
 
           <div className="bg-primary/10 p-3 rounded-md">
             <p className="text-sm text-primary">
-              ✓ Los productos existentes se mantendrán. Solo se agregarán productos nuevos (por código interno).
+              ✓ Los productos nuevos se agregarán. Los productos existentes se <b>actualizarán</b> con los datos del archivo, sin borrar sus respuestas.
             </p>
           </div>
 
